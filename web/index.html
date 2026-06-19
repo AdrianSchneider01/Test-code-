@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <title>What Should I Do?</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background: #ffffff;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      padding: 0 16px 48px;
+    }
+
+    .screen {
+      width: 100%;
+      max-width: 420px;
+      padding-top: 64px;
+    }
+
+    h1 {
+      font-size: 32px;
+      font-weight: 800;
+      color: #111827;
+      margin-bottom: 8px;
+      letter-spacing: -0.5px;
+      line-height: 1.15;
+    }
+
+    .subtitle {
+      font-size: 15px;
+      color: #6b7280;
+      margin-bottom: 32px;
+      line-height: 1.5;
+    }
+
+    label {
+      display: block;
+      font-size: 14px;
+      font-weight: 600;
+      color: #374151;
+      margin-bottom: 6px;
+      margin-top: 16px;
+    }
+
+    input[type="text"], input[type="number"] {
+      width: 100%;
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 13px 16px;
+      font-size: 15px;
+      color: #111827;
+      outline: none;
+      transition: border-color 0.15s;
+      font-family: inherit;
+    }
+    input::placeholder { color: #9ca3af; }
+    input:focus { border-color: #4F46E5; }
+
+    button {
+      display: block;
+      width: 100%;
+      background: #4F46E5;
+      color: #ffffff;
+      border: none;
+      border-radius: 14px;
+      padding: 16px;
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+      cursor: pointer;
+      margin-top: 28px;
+      box-shadow: 0 4px 14px rgba(79, 70, 229, 0.35);
+      transition: opacity 0.15s, transform 0.1s;
+      font-family: inherit;
+    }
+    button:hover { opacity: 0.92; }
+    button:active { transform: scale(0.98); }
+
+    #results { margin-top: 36px; }
+
+    .results-header {
+      font-size: 16px;
+      font-weight: 600;
+      color: #374151;
+      margin-bottom: 16px;
+      line-height: 1.5;
+    }
+
+    .card {
+      background: #f3f4f6;
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      animation: fadeSlide 0.25s ease forwards;
+      opacity: 0;
+    }
+
+    @keyframes fadeSlide {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .card-index {
+      width: 30px;
+      height: 30px;
+      min-width: 30px;
+      border-radius: 50%;
+      background: #4F46E5;
+      color: #ffffff;
+      font-size: 13px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .card-text {
+      font-size: 15px;
+      color: #1f2937;
+      line-height: 1.45;
+    }
+
+    .no-match-note {
+      font-size: 13px;
+      color: #9ca3af;
+      margin-top: 8px;
+      line-height: 1.5;
+      font-style: italic;
+    }
+  </style>
+</head>
+<body>
+<div class="screen">
+  <h1>What Should I Do?</h1>
+  <p class="subtitle">Tell us about yourself and we'll find the perfect activity.</p>
+
+  <label for="age">Your Age</label>
+  <input id="age" type="number" placeholder="e.g. 28" min="1" max="120" />
+
+  <label for="mood">Current Mood</label>
+  <input id="mood" type="text" placeholder="e.g. happy, sad, bored, anxious..." />
+
+  <label for="vibe">Desired Vibe</label>
+  <input id="vibe" type="text" placeholder="e.g. active, chill, social, creative..." />
+
+  <button onclick="giveIdeas()">Give Me Ideas</button>
+
+  <div id="results"></div>
+</div>
+
+<script>
+const activityDatabase = [
+  { mood: 'happy',    vibe: 'active',     ideas: ['Go for a run in the park', 'Try a dance class', 'Play a sport with friends', 'Explore a new hiking trail'] },
+  { mood: 'happy',    vibe: 'chill',      ideas: ['Have a picnic outside', 'Watch your favorite movie', 'Cook a special meal', 'Read a feel-good book'] },
+  { mood: 'happy',    vibe: 'social',     ideas: ['Throw a small dinner party', 'Call someone you miss', 'Explore a farmers market with friends', 'Join a community event'] },
+  { mood: 'happy',    vibe: 'creative',   ideas: ['Paint or draw something joyful', 'Write in your journal', 'Try a new craft project', 'Make a photo collage'] },
+  { mood: 'sad',      vibe: 'chill',      ideas: ['Watch a comforting movie', 'Make a warm cup of tea and relax', 'Take a long bath', 'Listen to soothing music'] },
+  { mood: 'sad',      vibe: 'active',     ideas: ['Take a slow walk in nature', 'Do some gentle yoga', 'Swim some laps', 'Go for an easy bike ride'] },
+  { mood: 'sad',      vibe: 'social',     ideas: ['Reach out to a close friend', 'Visit a family member', 'Volunteer somewhere local', 'Join an online support community'] },
+  { mood: 'bored',    vibe: 'active',     ideas: ['Try a new sport or fitness class', 'Go for a run somewhere new', 'Do a home workout challenge', 'Take a long bike ride'] },
+  { mood: 'bored',    vibe: 'creative',   ideas: ['Learn to draw or paint', 'Start a DIY home project', 'Write a short story', 'Pick up a new instrument'] },
+  { mood: 'bored',    vibe: 'productive', ideas: ['Organize a cluttered space', 'Learn a new skill online', 'Plan your week ahead', 'Start that project you have been putting off'] },
+  { mood: 'anxious',  vibe: 'chill',      ideas: ['Practice deep breathing exercises', 'Try a guided meditation', 'Do gentle stretches', 'Write your worries in a journal'] },
+  { mood: 'anxious',  vibe: 'active',     ideas: ['Go for a brisk walk', 'Do a yoga session', 'Try boxing or kickboxing', 'Go for a swim'] },
+  { mood: 'tired',    vibe: 'chill',      ideas: ['Take a short nap', 'Watch a light TV show', 'Read a few chapters of a book', 'Listen to a podcast in bed'] },
+  { mood: 'tired',    vibe: 'creative',   ideas: ['Doodle or color in a coloring book', 'Listen to music and daydream', 'Browse design inspiration online', 'Write a short poem'] },
+  { mood: 'energetic',vibe: 'active',     ideas: ['Hit the gym hard', 'Play a competitive sport', 'Go rock climbing', 'Do a HIIT workout'] },
+  { mood: 'energetic',vibe: 'social',     ideas: ['Organize a group outing', 'Host a game night', 'Go dancing with friends', 'Join a local sports league'] },
+  { mood: 'stressed', vibe: 'chill',      ideas: ['Practice mindfulness meditation', 'Take a long hot shower', 'Do some light reading', 'Listen to calming music'] },
+  { mood: 'stressed', vibe: 'active',     ideas: ['Go for a run to clear your head', 'Try a kickboxing class', 'Do a high-intensity workout', 'Take a swim'] },
+  { mood: 'excited',  vibe: 'social',     ideas: ['Plan a spontaneous road trip', 'Invite friends for a night out', 'Try a new restaurant together', 'Organize a group activity'] },
+  { mood: 'excited',  vibe: 'creative',   ideas: ['Start a passion project', 'Record a video or podcast', 'Redecorate a room', 'Create something to share online'] },
+  { mood: 'calm',     vibe: 'chill',      ideas: ['Enjoy a quiet reading session', 'Do a jigsaw puzzle', 'Garden or tend to houseplants', 'Practice journaling'] },
+  { mood: 'calm',     vibe: 'creative',   ideas: ['Write poetry or prose', 'Sketch or paint landscapes', 'Learn calligraphy', 'Compose a simple melody'] },
+];
+
+const fallbackIdeas = [
+  'Go for a walk',
+  'Listen to a podcast',
+  'Learn a new skill',
+  'Call a friend',
+  'Try a new recipe',
+];
+
+function giveIdeas() {
+  const mood = document.getElementById('mood').value.trim().toLowerCase();
+  const vibe = document.getElementById('vibe').value.trim().toLowerCase();
+  const resultsEl = document.getElementById('results');
+
+  const match = activityDatabase.find(e => e.mood === mood && e.vibe === vibe);
+  const ideas = match ? match.ideas : fallbackIdeas;
+  const isGeneric = !match;
+
+  const header = isGeneric
+    ? 'Here are some ideas to get you started:'
+    : `Ideas for when you're feeling ${mood} and want something ${vibe}:`;
+
+  const cards = ideas.map((idea, i) => `
+    <div class="card" style="animation-delay:${i * 0.06}s">
+      <div class="card-index">${i + 1}</div>
+      <span class="card-text">${idea}</span>
+    </div>
+  `).join('');
+
+  const note = isGeneric && mood && vibe ? `
+    <p class="no-match-note">
+      No exact match for "${mood}" + "${vibe}". Try moods like
+      happy, sad, bored, anxious, tired, energetic, stressed, excited, or calm —
+      and vibes like active, chill, social, creative, or productive.
+    </p>
+  ` : '';
+
+  resultsEl.innerHTML = `
+    <p class="results-header">${header}</p>
+    ${cards}
+    ${note}
+  `;
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter') giveIdeas();
+});
+</script>
+</body>
+</html>
