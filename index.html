@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Best Boredom App</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <h1>😴 Best Boredom App</h1>
+    <p class="tagline">Stop staring at the ceiling. Do something.</p>
+  </header>
+
+  <main>
+    <section class="filters">
+      <div class="filter-group">
+        <label>Energy Level</label>
+        <div class="btn-group" id="energy-filter">
+          <button class="filter-btn active" data-value="all">All</button>
+          <button class="filter-btn" data-value="low">Low 😪</button>
+          <button class="filter-btn" data-value="medium">Medium 🙂</button>
+          <button class="filter-btn" data-value="high">High 🔥</button>
+        </div>
+      </div>
+      <div class="filter-group">
+        <label>Time Available</label>
+        <div class="btn-group" id="time-filter">
+          <button class="filter-btn active" data-value="all">All</button>
+          <button class="filter-btn" data-value="5">5 min</button>
+          <button class="filter-btn" data-value="30">30 min</button>
+          <button class="filter-btn" data-value="60">1 hr+</button>
+        </div>
+      </div>
+      <div class="filter-group">
+        <label>Category</label>
+        <div class="btn-group" id="category-filter">
+          <button class="filter-btn active" data-value="all">All</button>
+          <button class="filter-btn" data-value="creative">Creative</button>
+          <button class="filter-btn" data-value="active">Active</button>
+          <button class="filter-btn" data-value="social">Social</button>
+          <button class="filter-btn" data-value="learning">Learning</button>
+          <button class="filter-btn" data-value="chill">Chill</button>
+        </div>
+      </div>
+    </section>
+
+    <div class="cta-row">
+      <button id="surprise-btn" class="surprise-btn">
+        <span class="btn-icon">🎲</span> Surprise Me!
+      </button>
+    </div>
+
+    <section id="featured-card" class="featured-card hidden">
+      <div class="card-inner">
+        <span class="card-emoji" id="feat-emoji"></span>
+        <h2 id="feat-title"></h2>
+        <p id="feat-desc"></p>
+        <div class="card-meta">
+          <span class="meta-tag" id="feat-time"></span>
+          <span class="meta-tag" id="feat-energy"></span>
+          <span class="meta-tag" id="feat-category"></span>
+        </div>
+        <div class="card-actions">
+          <button id="feat-save" class="icon-btn" title="Save to favorites">♡</button>
+          <button id="feat-next" class="icon-btn" title="Next idea">↻</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="grid" id="activity-grid"></section>
+
+    <section class="favorites-section hidden" id="favorites-section">
+      <h2>Your Favorites ❤️</h2>
+      <div class="grid" id="favorites-grid"></div>
+      <button id="clear-faves" class="ghost-btn">Clear all favorites</button>
+    </section>
+  </main>
+
+  <footer>
+    <p>Made to end your boredom, one idea at a time.</p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
