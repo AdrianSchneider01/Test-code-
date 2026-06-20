@@ -6,7 +6,7 @@
   <title>Best Boredom App</title>
   <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html { overflow-y: scroll; }
+html { overflow-y: auto; }
 body { min-height: 100vh; }
 
 :root {
@@ -27,7 +27,6 @@ body {
   font-family: 'Segoe UI', system-ui, sans-serif;
 }
 
-/* ── Header ── */
 header {
   text-align: center;
   padding: 2rem 1rem 0;
@@ -44,7 +43,6 @@ header h1 {
 }
 .tagline { color: var(--muted); margin-top: 0.3rem; font-size: 0.95rem; }
 
-/* ── Nav ── */
 nav {
   background: linear-gradient(135deg, #1a0533 0%, #0f0f1a 100%);
   padding: 1rem 1rem 0;
@@ -72,7 +70,6 @@ nav {
   background: rgba(124,58,237,0.1);
 }
 
-/* ── Pages ── */
 .page { display: none; }
 .page.active { display: block; }
 
@@ -83,7 +80,6 @@ main {
   width: 100%;
 }
 
-/* ── Filters ── */
 .filters {
   display: flex;
   flex-direction: column;
@@ -92,6 +88,11 @@ main {
   border-radius: var(--radius);
   padding: 1.4rem;
   margin-bottom: 1.5rem;
+}
+.filter-divider {
+  border: none;
+  border-top: 1px solid var(--surface2);
+  margin: 0.2rem 0;
 }
 .filter-group label {
   display: block;
@@ -121,7 +122,6 @@ main {
   font-weight: 600;
 }
 
-/* ── Activity grid ── */
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(255px, 1fr));
@@ -152,7 +152,6 @@ main {
 .save-btn:hover, .save-btn.saved { opacity: 1; }
 .save-btn.saved { color: #ef4444; }
 
-/* ── Featured card ── */
 .featured-card {
   background: linear-gradient(135deg, #1e0640, #16213e);
   border: 1.5px solid var(--accent);
@@ -182,7 +181,6 @@ main {
 .icon-btn:hover { border-color: var(--accent2); color: var(--accent2); }
 .icon-btn.saved { color: #ef4444; border-color: #ef4444; }
 
-/* ── Misc shared ── */
 .hidden { display: none !important; }
 .no-results { text-align: center; color: var(--muted); grid-column: 1/-1; padding: 3rem 0; font-size: 1.05rem; }
 .section-title { font-size: 1.3rem; font-weight: 700; margin-bottom: 1.1rem; }
@@ -193,22 +191,20 @@ main {
 }
 .ghost-btn:hover { border-color: #ef4444; color: #ef4444; }
 
-/* ── Surprise page ── */
 .surprise-wrap { max-width: 700px; margin: 0 auto; }
 .surprise-quick-filters { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1.5rem; justify-content: center; }
 .spin-btn {
-  display: flex; align-items: center; justify-content: center; gap: 0.6rem;
+  display: block;
   background: linear-gradient(135deg, var(--accent), #a855f7);
   color: #fff; border: none; padding: 1rem 2.6rem;
   border-radius: 999px; font-size: 1.2rem; font-weight: 700; cursor: pointer;
   box-shadow: 0 0 30px rgba(124,58,237,0.4);
   transition: transform 0.15s, box-shadow 0.15s;
-  margin: 0 auto 1.5rem; display: block;
+  margin: 0 auto 1.5rem;
 }
 .spin-btn:hover { transform: scale(1.05); box-shadow: 0 0 44px rgba(124,58,237,0.6); }
 .spin-btn:active { transform: scale(0.97); }
 
-/* ── Categories page ── */
 .cat-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
@@ -228,7 +224,6 @@ main {
 .cat-name { font-size: 1.1rem; font-weight: 700; margin-bottom: 0.3rem; }
 .cat-count { font-size: 0.82rem; color: var(--muted); }
 
-/* ── Favorites page ── */
 .empty-state { text-align: center; padding: 4rem 1rem; color: var(--muted); }
 .empty-state .big-icon { font-size: 3rem; display: block; margin-bottom: 1rem; }
 .empty-state p { font-size: 1rem; line-height: 1.6; }
@@ -262,7 +257,7 @@ footer {
   <button class="nav-btn" data-page="categories">📂 Categories</button>
 </nav>
 
-<!-- ══════════════ DISCOVER ══════════════ -->
+<!-- DISCOVER -->
 <div id="page-discover" class="page active">
   <main>
     <section class="filters">
@@ -279,8 +274,8 @@ footer {
         <label>Time Available</label>
         <div class="btn-group" id="time-filter">
           <button class="filter-btn active" data-value="all">All</button>
-          <button class="filter-btn" data-value="5">5 min</button>
-          <button class="filter-btn" data-value="30">30 min</button>
+          <button class="filter-btn" data-value="5">~5 min</button>
+          <button class="filter-btn" data-value="30">~30 min</button>
           <button class="filter-btn" data-value="60">1 hr+</button>
         </div>
       </div>
@@ -295,20 +290,39 @@ footer {
           <button class="filter-btn" data-value="chill">Chill</button>
         </div>
       </div>
+      <hr class="filter-divider" />
       <div class="filter-group">
-        <label>Where</label>
+        <label>How are you feeling?</label>
+        <div class="btn-group" id="mood-filter">
+          <button class="filter-btn active" data-value="all">Any mood</button>
+          <button class="filter-btn" data-value="bored">Just bored 😑</button>
+          <button class="filter-btn" data-value="restless">Need to move ⚡</button>
+          <button class="filter-btn" data-value="stressed">Stressed out 😤</button>
+          <button class="filter-btn" data-value="creative">Feeling creative 💡</button>
+        </div>
+      </div>
+      <div class="filter-group">
+        <label>Where are you?</label>
         <div class="btn-group" id="location-filter">
-          <button class="filter-btn active" data-value="all">All</button>
+          <button class="filter-btn active" data-value="all">Anywhere</button>
           <button class="filter-btn" data-value="indoor">Indoors 🏠</button>
           <button class="filter-btn" data-value="outdoor">Outdoors 🌳</button>
         </div>
       </div>
       <div class="filter-group">
-        <label>Who</label>
+        <label>Who are you with?</label>
         <div class="btn-group" id="social-filter">
-          <button class="filter-btn active" data-value="all">All</button>
+          <button class="filter-btn active" data-value="all">Anyone</button>
           <button class="filter-btn" data-value="solo">Solo 🙋</button>
           <button class="filter-btn" data-value="group">With others 👥</button>
+        </div>
+      </div>
+      <div class="filter-group">
+        <label>Supplies available</label>
+        <div class="btn-group" id="supplies-filter">
+          <button class="filter-btn active" data-value="all">Anything</button>
+          <button class="filter-btn" data-value="nothing">Nothing on hand ✋</button>
+          <button class="filter-btn" data-value="basic">Basic stuff at home 📎</button>
         </div>
       </div>
       <div class="filter-group">
@@ -318,6 +332,14 @@ footer {
           <button class="filter-btn" data-value="free">Free 🆓</button>
           <button class="filter-btn" data-value="low">Cheap 💸</button>
           <button class="filter-btn" data-value="paid">Costs money 💳</button>
+        </div>
+      </div>
+      <div class="filter-group">
+        <label>Age group</label>
+        <div class="btn-group" id="age-filter">
+          <button class="filter-btn active" data-value="all">Any age</button>
+          <button class="filter-btn" data-value="kids">Kid-friendly 👶</button>
+          <button class="filter-btn" data-value="adults">Adults+ 🧓</button>
         </div>
       </div>
     </section>
@@ -334,10 +356,13 @@ footer {
           <span class="meta-tag" id="feat-location"></span>
           <span class="meta-tag" id="feat-social"></span>
           <span class="meta-tag" id="feat-cost"></span>
+          <span class="meta-tag" id="feat-mood"></span>
+          <span class="meta-tag" id="feat-supplies"></span>
+          <span class="meta-tag" id="feat-age"></span>
         </div>
         <div class="card-actions">
-          <button id="feat-save" class="icon-btn" title="Save to favorites">♡</button>
-          <button id="feat-next" class="icon-btn" title="Next idea">↻</button>
+          <button id="feat-save" class="icon-btn" title="Save to favorites">&#9825;</button>
+          <button id="feat-next" class="icon-btn" title="Next idea">&#8635;</button>
         </div>
       </div>
     </section>
@@ -346,11 +371,11 @@ footer {
   </main>
 </div>
 
-<!-- ══════════════ SURPRISE ME ══════════════ -->
+<!-- SURPRISE ME -->
 <div id="page-surprise" class="page">
   <main>
     <div class="surprise-wrap">
-      <p style="text-align:center;color:var(--muted);margin-bottom:1.2rem;">Filter by energy, then spin for a random pick.</p>
+      <p style="text-align:center;color:var(--muted);margin-bottom:1.2rem;">Filter by energy then spin for a random pick.</p>
       <div class="surprise-quick-filters">
         <div class="btn-group" id="surprise-energy-filter">
           <button class="filter-btn active" data-value="all">Any energy</button>
@@ -372,10 +397,13 @@ footer {
             <span class="meta-tag" id="sp-location"></span>
             <span class="meta-tag" id="sp-social"></span>
             <span class="meta-tag" id="sp-cost"></span>
+            <span class="meta-tag" id="sp-mood"></span>
+            <span class="meta-tag" id="sp-supplies"></span>
+            <span class="meta-tag" id="sp-age"></span>
           </div>
           <div class="card-actions">
-            <button id="sp-save" class="icon-btn" title="Save to favorites">♡</button>
-            <button id="sp-next" class="icon-btn" title="Spin again">↻</button>
+            <button id="sp-save" class="icon-btn" title="Save to favorites">&#9825;</button>
+            <button id="sp-next" class="icon-btn" title="Spin again">&#8635;</button>
           </div>
         </div>
       </section>
@@ -383,7 +411,7 @@ footer {
   </main>
 </div>
 
-<!-- ══════════════ FAVORITES ══════════════ -->
+<!-- FAVORITES -->
 <div id="page-favorites" class="page">
   <main>
     <div id="favorites-empty" class="empty-state hidden">
@@ -397,7 +425,7 @@ footer {
   </main>
 </div>
 
-<!-- ══════════════ CATEGORIES ══════════════ -->
+<!-- CATEGORIES -->
 <div id="page-categories" class="page">
   <main>
     <p style="color:var(--muted);margin-bottom:1.5rem;">Pick a category to browse all activities in it.</p>
@@ -411,56 +439,56 @@ footer {
 
 <script>
 var ACTIVITIES = [
-  { id: 1,  emoji: "🎨", title: "Doodle something random",              desc: "Open a blank page and draw whatever comes to mind. No rules, no judgment — just let your hand move.",                                     category: "creative", energy: "low",    time: 5,  location: "indoor",  social: "solo",   cost: "free" },
-  { id: 2,  emoji: "✍️", title: "Write a 6-word story",                 desc: "Challenge yourself to tell a complete story in exactly six words. Hemingway supposedly invented this.",                                     category: "creative", energy: "low",    time: 5,  location: "indoor",  social: "solo",   cost: "free" },
-  { id: 3,  emoji: "📸", title: "Take interesting photos",              desc: "Walk around your space and find 10 interesting shots. Look for light, texture, or odd angles.",                                           category: "creative", energy: "medium", time: 30, location: "either",  social: "solo",   cost: "free" },
-  { id: 4,  emoji: "🎶", title: "Make a playlist",                      desc: "Build the perfect playlist for a mood — a road trip, a rainy day, or a Monday morning.",                                                  category: "creative", energy: "low",    time: 30, location: "indoor",  social: "solo",   cost: "free" },
-  { id: 5,  emoji: "🖊️", title: "Write a letter to future you",         desc: "Seal it and set a reminder to open it in a year. What do you want to remember about today?",                                             category: "creative", energy: "low",    time: 30, location: "indoor",  social: "solo",   cost: "free" },
-  { id: 6,  emoji: "🎭", title: "Rewrite a movie ending",               desc: "Pick any film and write an alternate ending. What would YOU have done differently?",                                                      category: "creative", energy: "low",    time: 60, location: "indoor",  social: "solo",   cost: "free" },
-  { id: 7,  emoji: "🖼️", title: "Rearrange your space",                 desc: "Move furniture around, swap out decor, or just tidy and redecorate a single shelf.",                                                     category: "creative", energy: "high",   time: 60, location: "indoor",  social: "solo",   cost: "free" },
-  { id: 8,  emoji: "🎨", title: "Try painting by numbers",              desc: "Grab a kit from a shop or print a template online. Meditative, satisfying, and you end up with actual art.",                             category: "creative", energy: "low",    time: 60, location: "indoor",  social: "solo",   cost: "low"  },
-  { id: 9,  emoji: "🗂️", title: "Redesign your phone home screen",      desc: "Pick a new wallpaper, reorganise apps into folders, change your icon pack. Make it feel new again.",                                     category: "creative", energy: "low",    time: 30, location: "indoor",  social: "solo",   cost: "free" },
-  { id: 10, emoji: "📦", title: "Try origami",                          desc: "Look up a beginner tutorial for a crane or a box. Requires nothing but paper and about 20 minutes of focus.",                            category: "creative", energy: "low",    time: 30, location: "indoor",  social: "solo",   cost: "free" },
-  { id: 11, emoji: "🕺", title: "Have a solo dance party",              desc: "Pick three of your favourite songs and dance like nobody's watching. Because nobody is.",                                                 category: "active",   energy: "high",   time: 5,  location: "indoor",  social: "solo",   cost: "free" },
-  { id: 12, emoji: "🧘", title: "Do a 10-min yoga flow",                desc: "Search 'beginner yoga 10 minutes' and follow along. Your back will thank you.",                                                          category: "active",   energy: "low",    time: 5,  location: "indoor",  social: "solo",   cost: "free" },
-  { id: 13, emoji: "🚶", title: "Take a walk with no destination",      desc: "Go outside and turn wherever feels right. No maps, no podcasts — just observe the world.",                                               category: "active",   energy: "medium", time: 30, location: "outdoor", social: "solo",   cost: "free" },
-  { id: 14, emoji: "💪", title: "7-minute workout",                     desc: "The classic scientific 7-minute circuit: jumping jacks, wall sit, push-ups, crunches — full body, no gear.",                             category: "active",   energy: "high",   time: 5,  location: "indoor",  social: "solo",   cost: "free" },
-  { id: 15, emoji: "🤸", title: "Try 10 new stretches",                 desc: "Look up stretches you've never tried before. Focus on the spots that feel tight.",                                                       category: "active",   energy: "low",    time: 30, location: "indoor",  social: "solo",   cost: "free" },
-  { id: 16, emoji: "🏃", title: "Run to one landmark and back",         desc: "Pick something visible from your place — a park, a sign, a corner — and sprint there and back.",                                        category: "active",   energy: "high",   time: 30, location: "outdoor", social: "solo",   cost: "free" },
-  { id: 17, emoji: "🚴", title: "Go for a bike ride",                   desc: "No destination needed. Just ride for 30 minutes and see where you end up. Good for the body and the brain.",                            category: "active",   energy: "medium", time: 60, location: "outdoor", social: "solo",   cost: "free" },
-  { id: 18, emoji: "🏊", title: "Go for a swim",                        desc: "Find a local pool or open water spot. Even 20 lengths is enough to completely reset your headspace.",                                    category: "active",   energy: "high",   time: 60, location: "outdoor", social: "solo",   cost: "low"  },
-  { id: 19, emoji: "🤹", title: "Learn to juggle",                      desc: "Start with two balls, then three. There are solid tutorials on YouTube. It takes a week to get decent — start today.",                  category: "active",   energy: "medium", time: 30, location: "indoor",  social: "solo",   cost: "free" },
-  { id: 20, emoji: "📞", title: "Call someone you miss",                desc: "Don't text. Actually call someone you haven't talked to in a while. Five minutes is enough.",                                            category: "social",   energy: "low",    time: 5,  location: "indoor",  social: "solo",   cost: "free" },
-  { id: 21, emoji: "🎮", title: "Play an online game with a friend",    desc: "Chess, Skribbl.io, Codenames — plenty of free multiplayer games that need zero setup.",                                                  category: "social",   energy: "low",    time: 30, location: "indoor",  social: "group",  cost: "free" },
-  { id: 22, emoji: "🍕", title: "Organise a spontaneous hangout",       desc: "Text three people 'are you free in an hour?' and see what happens. Low effort, high reward.",                                            category: "social",   energy: "medium", time: 60, location: "either",  social: "group",  cost: "low"  },
-  { id: 23, emoji: "💌", title: "Send an appreciation message",         desc: "Text someone a specific thing you appreciate about them. Not a compliment — a genuine observation.",                                     category: "social",   energy: "low",    time: 5,  location: "indoor",  social: "solo",   cost: "free" },
-  { id: 24, emoji: "🎲", title: "Start a group trivia quiz",            desc: "Use a free app or just look up trivia questions and quiz your group chat. Surprisingly competitive.",                                    category: "social",   energy: "low",    time: 30, location: "indoor",  social: "group",  cost: "free" },
-  { id: 25, emoji: "🎳", title: "Play a board game",                    desc: "Pull out a game that hasn't been touched in a year and rope in whoever's around. Low stakes, high fun.",                                 category: "social",   energy: "low",    time: 60, location: "indoor",  social: "group",  cost: "free" },
-  { id: 26, emoji: "🎤", title: "Do karaoke at home",                   desc: "Find a YouTube karaoke playlist, pick a ridiculous song, and commit completely. Solo or as a group, equally chaotic.",                  category: "social",   energy: "high",   time: 30, location: "indoor",  social: "group",  cost: "free" },
-  { id: 27, emoji: "🌳", title: "Visit a local market or event",        desc: "Check what's on near you — a farmers market, a car boot sale, a street festival. Free to browse, low pressure.",                       category: "social",   energy: "medium", time: 60, location: "outdoor", social: "group",  cost: "free" },
-  { id: 28, emoji: "🌍", title: "Learn a fact about a random country",  desc: "Pick a country at random on a map and read its Wikipedia intro. You'll end up knowing something genuinely interesting.",               category: "learning", energy: "low",    time: 5,  location: "indoor",  social: "solo",   cost: "free" },
-  { id: 29, emoji: "🧠", title: "Watch a TED talk",                     desc: "Pick a topic you know nothing about and watch a 10-15 minute TED talk on it.",                                                          category: "learning", energy: "low",    time: 30, location: "indoor",  social: "solo",   cost: "free" },
-  { id: 30, emoji: "🔤", title: "Learn 10 words in a new language",     desc: "Use a free app or just search. Try numbers, colours, or greetings in a language you've always wanted to speak.",                       category: "learning", energy: "low",    time: 5,  location: "indoor",  social: "solo",   cost: "free" },
-  { id: 31, emoji: "📚", title: "Read the first chapter of a book",     desc: "Grab a book you've been meaning to read. Commit to just the first chapter. That's it.",                                                 category: "learning", energy: "low",    time: 30, location: "indoor",  social: "solo",   cost: "free" },
-  { id: 32, emoji: "🍳", title: "Cook one new dish",                    desc: "Find a recipe with ingredients you have and cook it. Doesn't have to be perfect — first attempts rarely are.",                          category: "learning", energy: "medium", time: 60, location: "indoor",  social: "either", cost: "low"  },
-  { id: 33, emoji: "🎸", title: "Learn a simple song on an instrument", desc: "Even if you can't play, look up a beginner tutorial for guitar, piano, or ukulele on YouTube.",                                         category: "learning", energy: "medium", time: 60, location: "indoor",  social: "solo",   cost: "free" },
-  { id: 34, emoji: "🔭", title: "Explore a Wikipedia rabbit hole",      desc: "Open any Wikipedia article, click the first link in each article's body, and keep going for 10 minutes.",                               category: "learning", energy: "low",    time: 5,  location: "indoor",  social: "solo",   cost: "free" },
-  { id: 35, emoji: "🪄", title: "Learn a magic trick",                  desc: "Pick one trick and watch a tutorial until you can do it without looking. A good one takes 20 minutes to learn and will impress people forever.", category: "learning", energy: "low", time: 30, location: "indoor", social: "solo", cost: "free" },
-  { id: 36, emoji: "🏛️", title: "Visit a museum or gallery",            desc: "Most cities have free or cheap museums. Pick one you've never been to and give yourself two hours with no agenda.",                     category: "learning", energy: "medium", time: 60, location: "outdoor", social: "either", cost: "low"  },
-  { id: 37, emoji: "🍞", title: "Learn to bake something",              desc: "Pick a simple recipe — banana bread, cookies, a basic loaf. The process is satisfying and you get something to eat.",                   category: "learning", energy: "medium", time: 60, location: "indoor",  social: "either", cost: "low"  },
-  { id: 38, emoji: "🛁", title: "Take a long bath or shower",           desc: "Light a candle, put on music, and stay in way longer than necessary. You deserve it.",                                                   category: "chill",    energy: "low",    time: 30, location: "indoor",  social: "solo",   cost: "free" },
-  { id: 39, emoji: "📓", title: "Write in a journal",                   desc: "Free-write for 10 minutes. No topic, no structure — just write whatever comes to mind until time runs out.",                            category: "chill",    energy: "low",    time: 5,  location: "indoor",  social: "solo",   cost: "free" },
-  { id: 40, emoji: "🌿", title: "Sit outside and do nothing",           desc: "Find a spot outside and sit for 10 minutes without your phone. Just look at stuff. It's surprisingly good.",                            category: "chill",    energy: "low",    time: 5,  location: "outdoor", social: "solo",   cost: "free" },
-  { id: 41, emoji: "🍵", title: "Make a fancy hot drink",               desc: "Put real effort into a tea or coffee. Froth something, add a flavour, use the good mug.",                                               category: "chill",    energy: "low",    time: 5,  location: "indoor",  social: "solo",   cost: "free" },
-  { id: 42, emoji: "🎬", title: "Watch a short film",                   desc: "Go to Vimeo Staff Picks and watch one short film. Usually under 20 minutes and often stunning.",                                        category: "chill",    energy: "low",    time: 30, location: "indoor",  social: "solo",   cost: "free" },
-  { id: 43, emoji: "🧩", title: "Do a puzzle",                          desc: "Physical jigsaw or digital — either way, it's oddly satisfying and kills time perfectly.",                                              category: "chill",    energy: "low",    time: 60, location: "indoor",  social: "solo",   cost: "free" },
-  { id: 44, emoji: "😴", title: "Take a power nap",                     desc: "Set a timer for 20 minutes. Lie down, close your eyes. You might not sleep and that's fine.",                                          category: "chill",    energy: "low",    time: 30, location: "indoor",  social: "solo",   cost: "free" },
-  { id: 45, emoji: "🌙", title: "Plan your ideal trip",                 desc: "Pick a destination you'll probably never go to and plan the whole thing: flights, hotels, itinerary. Treat it seriously.",              category: "chill",    energy: "low",    time: 60, location: "indoor",  social: "solo",   cost: "free" },
-  { id: 46, emoji: "⭐", title: "Go stargazing",                        desc: "Head somewhere with low light pollution, lie on your back, and try to spot constellations. Bring a blanket.",                           category: "chill",    energy: "low",    time: 30, location: "outdoor", social: "either", cost: "free" },
-  { id: 47, emoji: "🌅", title: "Watch the sunrise or sunset",          desc: "Pick a spot with a good view and just sit with it. No photos needed — just watch it happen.",                                           category: "chill",    energy: "low",    time: 30, location: "outdoor", social: "either", cost: "free" },
-  { id: 48, emoji: "☕", title: "People-watch at a cafe",               desc: "Order one thing and sit somewhere with a good view of the room. No phone. Just observe. Endlessly interesting.",                        category: "chill",    energy: "low",    time: 60, location: "outdoor", social: "solo",   cost: "low"  },
-  { id: 49, emoji: "🕯️", title: "Do a digital detox hour",             desc: "Put your phone face down, turn off the TV, and sit with just music or silence for an hour. Harder than it sounds.",                    category: "chill",    energy: "low",    time: 60, location: "indoor",  social: "solo",   cost: "free" },
-  { id: 50, emoji: "🌺", title: "Tend to a plant",                      desc: "Water it, repot it, or just wipe the dust off the leaves. If you don't have one, look up which plant suits your home.",                category: "chill",    energy: "low",    time: 5,  location: "indoor",  social: "solo",   cost: "free" },
+  { id: 1,  emoji: "🎨", title: "Doodle something random",              desc: "Open a blank page and draw whatever comes to mind. No rules, no judgment — just let your hand move.",                                     category: "creative", energy: "low",    time: 5,  location: "indoor",  social: "solo",   cost: "free", mood: "creative", supplies: "nothing", age: "all"    },
+  { id: 2,  emoji: "✍️", title: "Write a 6-word story",                 desc: "Challenge yourself to tell a complete story in exactly six words. Hemingway supposedly invented this.",                                     category: "creative", energy: "low",    time: 5,  location: "indoor",  social: "solo",   cost: "free", mood: "creative", supplies: "nothing", age: "all"    },
+  { id: 3,  emoji: "📸", title: "Take interesting photos",              desc: "Walk around your space and find 10 interesting shots. Look for light, texture, or odd angles.",                                           category: "creative", energy: "medium", time: 30, location: "either",  social: "solo",   cost: "free", mood: "creative", supplies: "nothing", age: "all"    },
+  { id: 4,  emoji: "🎶", title: "Make a playlist",                      desc: "Build the perfect playlist for a mood — a road trip, a rainy day, or a Monday morning.",                                                  category: "creative", energy: "low",    time: 30, location: "indoor",  social: "solo",   cost: "free", mood: "bored",    supplies: "nothing", age: "all"    },
+  { id: 5,  emoji: "🖊️", title: "Write a letter to future you",         desc: "Seal it and set a reminder to open it in a year. What do you want to remember about today?",                                             category: "creative", energy: "low",    time: 30, location: "indoor",  social: "solo",   cost: "free", mood: "bored",    supplies: "basic",   age: "all"    },
+  { id: 6,  emoji: "🎭", title: "Rewrite a movie ending",               desc: "Pick any film and write an alternate ending. What would YOU have done differently?",                                                      category: "creative", energy: "low",    time: 60, location: "indoor",  social: "solo",   cost: "free", mood: "creative", supplies: "nothing", age: "all"    },
+  { id: 7,  emoji: "🖼️", title: "Rearrange your space",                 desc: "Move furniture around, swap out decor, or just tidy and redecorate a single shelf.",                                                     category: "creative", energy: "high",   time: 60, location: "indoor",  social: "solo",   cost: "free", mood: "restless", supplies: "nothing", age: "adults" },
+  { id: 8,  emoji: "🎨", title: "Try painting by numbers",              desc: "Grab a kit from a shop or print a template online. Meditative, satisfying, and you end up with actual art.",                             category: "creative", energy: "low",    time: 60, location: "indoor",  social: "solo",   cost: "low",  mood: "bored",    supplies: "gear",    age: "all"    },
+  { id: 9,  emoji: "🗂️", title: "Redesign your phone home screen",      desc: "Pick a new wallpaper, reorganise apps into folders, change your icon pack. Make it feel new again.",                                     category: "creative", energy: "low",    time: 30, location: "indoor",  social: "solo",   cost: "free", mood: "bored",    supplies: "nothing", age: "all"    },
+  { id: 10, emoji: "📦", title: "Try origami",                          desc: "Look up a beginner tutorial for a crane or a box. Requires nothing but paper and about 20 minutes of focus.",                            category: "creative", energy: "low",    time: 30, location: "indoor",  social: "solo",   cost: "free", mood: "stressed", supplies: "basic",   age: "all"    },
+  { id: 11, emoji: "🕺", title: "Have a solo dance party",              desc: "Pick three of your favourite songs and dance like nobody's watching. Because nobody is.",                                                 category: "active",   energy: "high",   time: 5,  location: "indoor",  social: "solo",   cost: "free", mood: "restless", supplies: "nothing", age: "all"    },
+  { id: 12, emoji: "🧘", title: "Do a 10-min yoga flow",                desc: "Search 'beginner yoga 10 minutes' and follow along. Your back will thank you.",                                                          category: "active",   energy: "low",    time: 5,  location: "indoor",  social: "solo",   cost: "free", mood: "stressed", supplies: "nothing", age: "all"    },
+  { id: 13, emoji: "🚶", title: "Take a walk with no destination",      desc: "Go outside and turn wherever feels right. No maps, no podcasts — just observe the world.",                                               category: "active",   energy: "medium", time: 30, location: "outdoor", social: "solo",   cost: "free", mood: "restless", supplies: "nothing", age: "all"    },
+  { id: 14, emoji: "💪", title: "7-minute workout",                     desc: "The classic scientific 7-minute circuit: jumping jacks, wall sit, push-ups, crunches — full body, no gear.",                             category: "active",   energy: "high",   time: 5,  location: "indoor",  social: "solo",   cost: "free", mood: "restless", supplies: "nothing", age: "all"    },
+  { id: 15, emoji: "🤸", title: "Try 10 new stretches",                 desc: "Look up stretches you've never tried before. Focus on the spots that feel tight.",                                                       category: "active",   energy: "low",    time: 30, location: "indoor",  social: "solo",   cost: "free", mood: "stressed", supplies: "nothing", age: "all"    },
+  { id: 16, emoji: "🏃", title: "Run to one landmark and back",         desc: "Pick something visible from your place — a park, a sign, a corner — and sprint there and back.",                                        category: "active",   energy: "high",   time: 30, location: "outdoor", social: "solo",   cost: "free", mood: "restless", supplies: "nothing", age: "all"    },
+  { id: 17, emoji: "🚴", title: "Go for a bike ride",                   desc: "No destination needed. Just ride for 30 minutes and see where you end up. Good for the body and the brain.",                            category: "active",   energy: "medium", time: 60, location: "outdoor", social: "solo",   cost: "free", mood: "restless", supplies: "gear",    age: "all"    },
+  { id: 18, emoji: "🏊", title: "Go for a swim",                        desc: "Find a local pool or open water spot. Even 20 lengths is enough to completely reset your headspace.",                                    category: "active",   energy: "high",   time: 60, location: "outdoor", social: "solo",   cost: "low",  mood: "restless", supplies: "gear",    age: "all"    },
+  { id: 19, emoji: "🤹", title: "Learn to juggle",                      desc: "Start with two balls, then three. There are solid tutorials on YouTube. It takes a week to get decent — start today.",                  category: "active",   energy: "medium", time: 30, location: "indoor",  social: "solo",   cost: "free", mood: "bored",    supplies: "basic",   age: "all"    },
+  { id: 20, emoji: "📞", title: "Call someone you miss",                desc: "Don't text. Actually call someone you haven't talked to in a while. Five minutes is enough.",                                            category: "social",   energy: "low",    time: 5,  location: "indoor",  social: "solo",   cost: "free", mood: "bored",    supplies: "nothing", age: "adults" },
+  { id: 21, emoji: "🎮", title: "Play an online game with a friend",    desc: "Chess, Skribbl.io, Codenames — plenty of free multiplayer games that need zero setup.",                                                  category: "social",   energy: "low",    time: 30, location: "indoor",  social: "group",  cost: "free", mood: "bored",    supplies: "nothing", age: "all"    },
+  { id: 22, emoji: "🍕", title: "Organise a spontaneous hangout",       desc: "Text three people 'are you free in an hour?' and see what happens. Low effort, high reward.",                                            category: "social",   energy: "medium", time: 60, location: "either",  social: "group",  cost: "low",  mood: "bored",    supplies: "nothing", age: "adults" },
+  { id: 23, emoji: "💌", title: "Send an appreciation message",         desc: "Text someone a specific thing you appreciate about them. Not a compliment — a genuine observation.",                                     category: "social",   energy: "low",    time: 5,  location: "indoor",  social: "solo",   cost: "free", mood: "bored",    supplies: "nothing", age: "all"    },
+  { id: 24, emoji: "🎲", title: "Start a group trivia quiz",            desc: "Use a free app or just look up trivia questions and quiz your group chat. Surprisingly competitive.",                                    category: "social",   energy: "low",    time: 30, location: "indoor",  social: "group",  cost: "free", mood: "bored",    supplies: "nothing", age: "all"    },
+  { id: 25, emoji: "🎳", title: "Play a board game",                    desc: "Pull out a game that hasn't been touched in a year and rope in whoever's around. Low stakes, high fun.",                                 category: "social",   energy: "low",    time: 60, location: "indoor",  social: "group",  cost: "free", mood: "bored",    supplies: "gear",    age: "all"    },
+  { id: 26, emoji: "🎤", title: "Do karaoke at home",                   desc: "Find a YouTube karaoke playlist, pick a ridiculous song, and commit completely. Solo or as a group, equally chaotic.",                  category: "social",   energy: "high",   time: 30, location: "indoor",  social: "group",  cost: "free", mood: "restless", supplies: "nothing", age: "all"    },
+  { id: 27, emoji: "🌳", title: "Visit a local market or event",        desc: "Check what's on near you — a farmers market, a car boot sale, a street festival. Free to browse, low pressure.",                       category: "social",   energy: "medium", time: 60, location: "outdoor", social: "group",  cost: "free", mood: "restless", supplies: "nothing", age: "all"    },
+  { id: 28, emoji: "🌍", title: "Learn a fact about a random country",  desc: "Pick a country at random on a map and read its Wikipedia intro. You'll end up knowing something genuinely interesting.",               category: "learning", energy: "low",    time: 5,  location: "indoor",  social: "solo",   cost: "free", mood: "bored",    supplies: "nothing", age: "all"    },
+  { id: 29, emoji: "🧠", title: "Watch a TED talk",                     desc: "Pick a topic you know nothing about and watch a 10-15 minute TED talk on it.",                                                          category: "learning", energy: "low",    time: 30, location: "indoor",  social: "solo",   cost: "free", mood: "bored",    supplies: "nothing", age: "adults" },
+  { id: 30, emoji: "🔤", title: "Learn 10 words in a new language",     desc: "Use a free app or just search. Try numbers, colours, or greetings in a language you've always wanted to speak.",                       category: "learning", energy: "low",    time: 5,  location: "indoor",  social: "solo",   cost: "free", mood: "bored",    supplies: "nothing", age: "all"    },
+  { id: 31, emoji: "📚", title: "Read the first chapter of a book",     desc: "Grab a book you've been meaning to read. Commit to just the first chapter. That's it.",                                                 category: "learning", energy: "low",    time: 30, location: "indoor",  social: "solo",   cost: "free", mood: "bored",    supplies: "basic",   age: "all"    },
+  { id: 32, emoji: "🍳", title: "Cook one new dish",                    desc: "Find a recipe with ingredients you have and cook it. Doesn't have to be perfect — first attempts rarely are.",                          category: "learning", energy: "medium", time: 60, location: "indoor",  social: "either", cost: "low",  mood: "creative", supplies: "basic",   age: "adults" },
+  { id: 33, emoji: "🎸", title: "Learn a simple song on an instrument", desc: "Even if you can't play, look up a beginner tutorial for guitar, piano, or ukulele on YouTube.",                                         category: "learning", energy: "medium", time: 60, location: "indoor",  social: "solo",   cost: "free", mood: "creative", supplies: "gear",    age: "all"    },
+  { id: 34, emoji: "🔭", title: "Explore a Wikipedia rabbit hole",      desc: "Open any Wikipedia article, click the first link in each article's body, and keep going for 10 minutes.",                               category: "learning", energy: "low",    time: 5,  location: "indoor",  social: "solo",   cost: "free", mood: "bored",    supplies: "nothing", age: "all"    },
+  { id: 35, emoji: "🪄", title: "Learn a magic trick",                  desc: "Pick one trick and watch a tutorial until you can do it without looking. Takes 20 minutes to learn and impresses people forever.",      category: "learning", energy: "low",    time: 30, location: "indoor",  social: "solo",   cost: "free", mood: "bored",    supplies: "basic",   age: "all"    },
+  { id: 36, emoji: "🏛️", title: "Visit a museum or gallery",            desc: "Most cities have free or cheap museums. Pick one you've never been to and give yourself two hours with no agenda.",                     category: "learning", energy: "medium", time: 60, location: "outdoor", social: "either", cost: "low",  mood: "bored",    supplies: "nothing", age: "all"    },
+  { id: 37, emoji: "🍞", title: "Learn to bake something",              desc: "Pick a simple recipe — banana bread, cookies, a basic loaf. The process is satisfying and you get something to eat.",                   category: "learning", energy: "medium", time: 60, location: "indoor",  social: "either", cost: "low",  mood: "creative", supplies: "basic",   age: "all"    },
+  { id: 38, emoji: "🛁", title: "Take a long bath or shower",           desc: "Light a candle, put on music, and stay in way longer than necessary. You deserve it.",                                                   category: "chill",    energy: "low",    time: 30, location: "indoor",  social: "solo",   cost: "free", mood: "stressed", supplies: "nothing", age: "all"    },
+  { id: 39, emoji: "📓", title: "Write in a journal",                   desc: "Free-write for 10 minutes. No topic, no structure — just write whatever comes to mind until time runs out.",                            category: "chill",    energy: "low",    time: 5,  location: "indoor",  social: "solo",   cost: "free", mood: "stressed", supplies: "basic",   age: "all"    },
+  { id: 40, emoji: "🌿", title: "Sit outside and do nothing",           desc: "Find a spot outside and sit for 10 minutes without your phone. Just look at stuff. It's surprisingly good.",                            category: "chill",    energy: "low",    time: 5,  location: "outdoor", social: "solo",   cost: "free", mood: "stressed", supplies: "nothing", age: "all"    },
+  { id: 41, emoji: "🍵", title: "Make a fancy hot drink",               desc: "Put real effort into a tea or coffee. Froth something, add a flavour, use the good mug.",                                               category: "chill",    energy: "low",    time: 5,  location: "indoor",  social: "solo",   cost: "free", mood: "stressed", supplies: "basic",   age: "all"    },
+  { id: 42, emoji: "🎬", title: "Watch a short film",                   desc: "Go to Vimeo Staff Picks and watch one short film. Usually under 20 minutes and often stunning.",                                        category: "chill",    energy: "low",    time: 30, location: "indoor",  social: "solo",   cost: "free", mood: "bored",    supplies: "nothing", age: "adults" },
+  { id: 43, emoji: "🧩", title: "Do a puzzle",                          desc: "Physical jigsaw or digital — either way, it's oddly satisfying and kills time perfectly.",                                              category: "chill",    energy: "low",    time: 60, location: "indoor",  social: "solo",   cost: "free", mood: "stressed", supplies: "gear",    age: "all"    },
+  { id: 44, emoji: "😴", title: "Take a power nap",                     desc: "Set a timer for 20 minutes. Lie down, close your eyes. You might not sleep and that's fine.",                                          category: "chill",    energy: "low",    time: 30, location: "indoor",  social: "solo",   cost: "free", mood: "stressed", supplies: "nothing", age: "all"    },
+  { id: 45, emoji: "🌙", title: "Plan your ideal trip",                 desc: "Pick a destination you'll probably never go to and plan the whole thing: flights, hotels, itinerary. Treat it seriously.",              category: "chill",    energy: "low",    time: 60, location: "indoor",  social: "solo",   cost: "free", mood: "creative", supplies: "nothing", age: "adults" },
+  { id: 46, emoji: "⭐", title: "Go stargazing",                        desc: "Head somewhere with low light pollution, lie on your back, and try to spot constellations. Bring a blanket.",                           category: "chill",    energy: "low",    time: 30, location: "outdoor", social: "either", cost: "free", mood: "stressed", supplies: "nothing", age: "all"    },
+  { id: 47, emoji: "🌅", title: "Watch the sunrise or sunset",          desc: "Pick a spot with a good view and just sit with it. No photos needed — just watch it happen.",                                           category: "chill",    energy: "low",    time: 30, location: "outdoor", social: "either", cost: "free", mood: "stressed", supplies: "nothing", age: "all"    },
+  { id: 48, emoji: "☕", title: "People-watch at a cafe",               desc: "Order one thing and sit somewhere with a good view of the room. No phone. Just observe. Endlessly interesting.",                        category: "chill",    energy: "low",    time: 60, location: "outdoor", social: "solo",   cost: "low",  mood: "bored",    supplies: "nothing", age: "adults" },
+  { id: 49, emoji: "🕯️", title: "Do a digital detox hour",             desc: "Put your phone face down, turn off the TV, and sit with just music or silence for an hour. Harder than it sounds.",                    category: "chill",    energy: "low",    time: 60, location: "indoor",  social: "solo",   cost: "free", mood: "stressed", supplies: "nothing", age: "adults" },
+  { id: 50, emoji: "🌺", title: "Tend to a plant",                      desc: "Water it, repot it, or just wipe the dust off the leaves. If you don't have one, look up which plant suits your home.",                category: "chill",    energy: "low",    time: 5,  location: "indoor",  social: "solo",   cost: "free", mood: "stressed", supplies: "nothing", age: "all"    }
 ];
 
 var TIME_LABEL     = { 5: "~5 min", 30: "~30 min", 60: "1 hr+" };
@@ -468,13 +496,16 @@ var ENERGY_LABEL   = { low: "Low energy 😪", medium: "Medium 🙂", high: "Hig
 var LOCATION_LABEL = { indoor: "Indoors 🏠", outdoor: "Outdoors 🌳", either: "Anywhere" };
 var SOCIAL_LABEL   = { solo: "Solo 🙋", group: "With others 👥", either: "Either" };
 var COST_LABEL     = { free: "Free 🆓", low: "Cheap 💸", paid: "Costs money 💳" };
+var MOOD_LABEL     = { bored: "Just bored 😑", restless: "Need to move ⚡", stressed: "Stress relief 😤", creative: "Feeling creative 💡" };
+var SUPPLIES_LABEL = { nothing: "Nothing needed ✋", basic: "Basic supplies 📎", gear: "Some gear 🎒" };
+var AGE_LABEL      = { all: "All ages 👶", adults: "Adults+ 🧓" };
 
 var CATEGORIES = [
   { id: "creative", emoji: "🎨", name: "Creative" },
   { id: "active",   emoji: "💪", name: "Active"   },
   { id: "social",   emoji: "👥", name: "Social"   },
   { id: "learning", emoji: "📚", name: "Learning" },
-  { id: "chill",    emoji: "😌", name: "Chill"    },
+  { id: "chill",    emoji: "😌", name: "Chill"    }
 ];
 
 /* ── State ── */
@@ -500,12 +531,10 @@ function showPage(name) {
   var btn = document.querySelector(".nav-btn[data-page='" + name + "']");
   if (btn) btn.classList.add("active");
 
-  if (name === "discover")    renderGrid();
-  if (name === "surprise")    spinSurprise();
-  if (name === "favorites")   renderFavoritesPage();
-  if (name === "categories")  renderCategories();
-
-  try { location.hash = name; } catch(e) {}
+  if (name === "discover")   renderGrid();
+  if (name === "surprise")   spinSurprise();
+  if (name === "favorites")  renderFavoritesPage();
+  if (name === "categories") renderCategories();
 }
 
 var navBtns = document.querySelectorAll(".nav-btn");
@@ -515,7 +544,7 @@ for (var i = 0; i < navBtns.length; i++) {
   })(navBtns[i]);
 }
 
-/* ── Filter helpers (Discover) ── */
+/* ── Filter helpers ── */
 function getActiveFilter(groupId) {
   var active = document.getElementById(groupId).querySelector(".filter-btn.active");
   return active ? active.getAttribute("data-value") : "all";
@@ -525,16 +554,25 @@ function getFiltered() {
   var energy   = getActiveFilter("energy-filter");
   var time     = getActiveFilter("time-filter");
   var category = getActiveFilter("category-filter");
+  var mood     = getActiveFilter("mood-filter");
   var location = getActiveFilter("location-filter");
   var social   = getActiveFilter("social-filter");
+  var supplies = getActiveFilter("supplies-filter");
   var cost     = getActiveFilter("cost-filter");
+  var age      = getActiveFilter("age-filter");
+
   return ACTIVITIES.filter(function(a) {
-    if (energy   !== "all" && a.energy   !== energy)                               return false;
-    if (time     !== "all" && a.time     !== Number(time))                         return false;
-    if (category !== "all" && a.category !== category)                             return false;
-    if (location !== "all" && a.location !== location && a.location !== "either")  return false;
-    if (social   !== "all" && a.social   !== social   && a.social   !== "either")  return false;
-    if (cost     !== "all" && a.cost     !== cost)                                 return false;
+    if (energy   !== "all" && a.energy   !== energy)                              return false;
+    if (time     !== "all" && a.time     !== Number(time))                        return false;
+    if (category !== "all" && a.category !== category)                            return false;
+    if (mood     !== "all" && a.mood     !== mood)                                return false;
+    if (location !== "all" && a.location !== location && a.location !== "either") return false;
+    if (social   !== "all" && a.social   !== social   && a.social   !== "either") return false;
+    if (supplies === "nothing" && a.supplies !== "nothing")                        return false;
+    if (supplies === "basic"   && a.supplies === "gear")                           return false;
+    if (cost     !== "all" && a.cost     !== cost)                                return false;
+    if (age      === "kids"   && a.age !== "all")                                 return false;
+    if (age      === "adults" && a.age !== "adults")                              return false;
     return true;
   });
 }
@@ -573,15 +611,36 @@ function renderFeaturedCard(ids, activity) {
   document.getElementById(ids.location).textContent = LOCATION_LABEL[activity.location];
   document.getElementById(ids.social).textContent   = SOCIAL_LABEL[activity.social];
   document.getElementById(ids.cost).textContent     = COST_LABEL[activity.cost];
+  document.getElementById(ids.mood).textContent     = MOOD_LABEL[activity.mood];
+  document.getElementById(ids.supplies).textContent = SUPPLIES_LABEL[activity.supplies];
+  document.getElementById(ids.age).textContent      = AGE_LABEL[activity.age];
+
   var saveEl = document.getElementById(ids.save);
-  saveEl.textContent  = isSaved(activity.id) ? "❤️" : "♡";
-  saveEl.className    = "icon-btn" + (isSaved(activity.id) ? " saved" : "");
+  saveEl.textContent = isSaved(activity.id) ? "❤️" : "♡";
+  saveEl.className   = "icon-btn" + (isSaved(activity.id) ? " saved" : "");
+
   var cardEl = document.getElementById(ids.card);
   cardEl.classList.remove("hidden");
   cardEl.style.animation = "none";
   void cardEl.offsetHeight;
   cardEl.style.animation = "";
 }
+
+var DISCOVER_IDS = {
+  card: "featured-card", emoji: "feat-emoji", title: "feat-title",
+  desc: "feat-desc", time: "feat-time", energy: "feat-energy",
+  category: "feat-category", location: "feat-location",
+  social: "feat-social", cost: "feat-cost", save: "feat-save",
+  mood: "feat-mood", supplies: "feat-supplies", age: "feat-age"
+};
+
+var SURPRISE_IDS = {
+  card: "surprise-card", emoji: "sp-emoji", title: "sp-title",
+  desc: "sp-desc", time: "sp-time", energy: "sp-energy",
+  category: "sp-category", location: "sp-location",
+  social: "sp-social", cost: "sp-cost", save: "sp-save",
+  mood: "sp-mood", supplies: "sp-supplies", age: "sp-age"
+};
 
 /* ═══════════ DISCOVER PAGE ═══════════ */
 var discoverCurrent = null;
@@ -590,6 +649,7 @@ function renderGrid() {
   var grid = document.getElementById("activity-grid");
   grid.innerHTML = "";
   var items = getFiltered();
+
   if (!items.length) {
     var msg = document.createElement("p");
     msg.className = "no-results";
@@ -598,50 +658,36 @@ function renderGrid() {
     document.getElementById("featured-card").classList.add("hidden");
     return;
   }
+
   for (var i = 0; i < items.length; i++) {
     (function(act) {
       var card = makeActivityCard(act, function() { renderGrid(); });
       card.addEventListener("click", function() {
         discoverCurrent = act;
-        renderFeaturedCard({
-          card: "featured-card", emoji: "feat-emoji", title: "feat-title",
-          desc: "feat-desc", time: "feat-time", energy: "feat-energy",
-          category: "feat-category", location: "feat-location",
-          social: "feat-social", cost: "feat-cost", save: "feat-save"
-        }, act);
+        renderFeaturedCard(DISCOVER_IDS, act);
       });
       grid.appendChild(card);
     })(items[i]);
   }
 }
 
-document.getElementById("feat-save").addEventListener("click", function() {
-  if (!discoverCurrent) return;
-  toggleFave(discoverCurrent.id);
-  renderFeaturedCard({
-    card: "featured-card", emoji: "feat-emoji", title: "feat-title",
-    desc: "feat-desc", time: "feat-time", energy: "feat-energy",
-    category: "feat-category", location: "feat-location",
-    social: "feat-social", cost: "feat-cost", save: "feat-save"
-  }, discoverCurrent);
-  renderGrid();
-});
-
 function showDiscoverSuggestion() {
   var pool = getFiltered();
   if (!pool.length) return;
   discoverCurrent = pool[Math.floor(Math.random() * pool.length)];
-  renderFeaturedCard({
-    card: "featured-card", emoji: "feat-emoji", title: "feat-title",
-    desc: "feat-desc", time: "feat-time", energy: "feat-energy",
-    category: "feat-category", location: "feat-location",
-    social: "feat-social", cost: "feat-cost", save: "feat-save"
-  }, discoverCurrent);
+  renderFeaturedCard(DISCOVER_IDS, discoverCurrent);
 }
+
+document.getElementById("feat-save").addEventListener("click", function() {
+  if (!discoverCurrent) return;
+  toggleFave(discoverCurrent.id);
+  renderFeaturedCard(DISCOVER_IDS, discoverCurrent);
+  renderGrid();
+});
 
 document.getElementById("feat-next").addEventListener("click", showDiscoverSuggestion);
 
-/* Filter buttons for Discover — auto-suggest on selection */
+/* Filter buttons — deselect siblings, re-render, auto-suggest */
 var allFilterBtns = document.querySelectorAll("#page-discover .filter-btn");
 for (var i = 0; i < allFilterBtns.length; i++) {
   (function(btn) {
@@ -665,27 +711,16 @@ function spinSurprise() {
   if (!pool.length) return;
   var act = pool[Math.floor(Math.random() * pool.length)];
   currentSurpriseActivity = act;
-  renderFeaturedCard({
-    card: "surprise-card", emoji: "sp-emoji", title: "sp-title",
-    desc: "sp-desc", time: "sp-time", energy: "sp-energy",
-    category: "sp-category", location: "sp-location",
-    social: "sp-social", cost: "sp-cost", save: "sp-save"
-  }, act);
+  renderFeaturedCard(SURPRISE_IDS, act);
 }
 
 document.getElementById("spin-btn").addEventListener("click", spinSurprise);
-
 document.getElementById("sp-next").addEventListener("click", spinSurprise);
 
 document.getElementById("sp-save").addEventListener("click", function() {
   if (!currentSurpriseActivity) return;
   toggleFave(currentSurpriseActivity.id);
-  renderFeaturedCard({
-    card: "surprise-card", emoji: "sp-emoji", title: "sp-title",
-    desc: "sp-desc", time: "sp-time", energy: "sp-energy",
-    category: "sp-category", location: "sp-location",
-    social: "sp-social", cost: "sp-cost", save: "sp-save"
-  }, currentSurpriseActivity);
+  renderFeaturedCard(SURPRISE_IDS, currentSurpriseActivity);
 });
 
 var surpriseFilterBtns = document.querySelectorAll("#surprise-energy-filter .filter-btn");
@@ -746,13 +781,13 @@ function renderCategories() {
         '<div class="cat-count">' + count + ' activities</div>';
       card.addEventListener("click", function() {
         showPage("discover");
-        /* Set the category filter to this category */
         var catBtns = document.querySelectorAll("#category-filter .filter-btn");
         for (var j = 0; j < catBtns.length; j++) {
           catBtns[j].classList.remove("active");
           if (catBtns[j].getAttribute("data-value") === cat.id) catBtns[j].classList.add("active");
         }
         renderGrid();
+        showDiscoverSuggestion();
       });
       grid.appendChild(card);
     })(CATEGORIES[i]);
