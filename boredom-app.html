@@ -430,7 +430,6 @@ const ACTIVITIES = [
 const TIME_LABEL = { 5: "~5 min", 30: "~30 min", 60: "1 hr+" };
 const ENERGY_LABEL = { low: "Low energy 😪", medium: "Medium energy 🙂", high: "High energy 🔥" };
 
-let filters = { energy: "all", time: "all", category: "all" };
 let favorites = JSON.parse(localStorage.getItem("boredom-faves") || "[]");
 let currentFeatured = null;
 
@@ -441,11 +440,19 @@ function toggleFave(id) {
   saveFavorites();
 }
 
+function getActiveFilter(groupId) {
+  var active = document.getElementById(groupId).querySelector(".filter-btn.active");
+  return active ? active.getAttribute("data-value") : "all";
+}
+
 function getFiltered() {
-  return ACTIVITIES.filter(a => {
-    if (filters.energy !== "all" && a.energy !== filters.energy) return false;
-    if (filters.time !== "all" && a.time !== Number(filters.time)) return false;
-    if (filters.category !== "all" && a.category !== filters.category) return false;
+  var energy = getActiveFilter("energy-filter");
+  var time = getActiveFilter("time-filter");
+  var category = getActiveFilter("category-filter");
+  return ACTIVITIES.filter(function(a) {
+    if (energy !== "all" && a.energy !== energy) return false;
+    if (time !== "all" && a.time !== Number(time)) return false;
+    if (category !== "all" && a.category !== category) return false;
     return true;
   });
 }
@@ -522,16 +529,20 @@ function renderFavorites() {
 }
 
 function setupFilters() {
-  document.querySelectorAll(".filter-btn").forEach(btn => {
-    btn.addEventListener("click", () => {
-      const group = btn.parentElement;
-      group.querySelectorAll(".filter-btn").forEach(b => b.classList.remove("active"));
-      btn.classList.add("active");
-      const key = group.id.split("-")[0];
-      filters[key] = btn.dataset.value;
-      renderGrid();
-    });
-  });
+  var allBtns = document.querySelectorAll(".filter-btn");
+  for (var i = 0; i < allBtns.length; i++) {
+    (function(btn) {
+      btn.addEventListener("click", function() {
+        var group = btn.parentElement;
+        var siblings = group.querySelectorAll(".filter-btn");
+        for (var j = 0; j < siblings.length; j++) {
+          siblings[j].classList.remove("active");
+        }
+        btn.classList.add("active");
+        renderGrid();
+      });
+    })(allBtns[i]);
+  }
 }
 
 document.getElementById("surprise-btn").addEventListener("click", surpriseMe);
