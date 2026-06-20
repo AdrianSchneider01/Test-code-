@@ -522,14 +522,12 @@ function renderFavorites() {
 }
 
 function setupFilters() {
-  ["energy-filter", "time-filter", "category-filter"].forEach(groupId => {
-    const key = groupId.split("-")[0];
-    const group = document.getElementById(groupId);
-    group.addEventListener("click", (e) => {
-      const btn = e.target.closest(".filter-btn");
-      if (!btn) return;
+  document.querySelectorAll(".filter-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const group = btn.parentElement;
       group.querySelectorAll(".filter-btn").forEach(b => b.classList.remove("active"));
       btn.classList.add("active");
+      const key = group.id.split("-")[0];
       filters[key] = btn.dataset.value;
       renderGrid();
     });
