@@ -352,6 +352,31 @@ footer {
           <button class="filter-btn" data-value="chill">Chill</button>
         </div>
       </div>
+      <div class="filter-group">
+        <label>Where</label>
+        <div class="btn-group" id="location-filter">
+          <button class="filter-btn active" data-value="all">All</button>
+          <button class="filter-btn" data-value="indoor">Indoors 🏠</button>
+          <button class="filter-btn" data-value="outdoor">Outdoors 🌳</button>
+        </div>
+      </div>
+      <div class="filter-group">
+        <label>Who</label>
+        <div class="btn-group" id="social-filter">
+          <button class="filter-btn active" data-value="all">All</button>
+          <button class="filter-btn" data-value="solo">Solo 🙋</button>
+          <button class="filter-btn" data-value="group">With others 👥</button>
+        </div>
+      </div>
+      <div class="filter-group">
+        <label>Cost</label>
+        <div class="btn-group" id="cost-filter">
+          <button class="filter-btn active" data-value="all">All</button>
+          <button class="filter-btn" data-value="free">Free 🆓</button>
+          <button class="filter-btn" data-value="low">Cheap 💸</button>
+          <button class="filter-btn" data-value="paid">Costs money 💳</button>
+        </div>
+      </div>
     </section>
 
     <div class="cta-row">
@@ -369,6 +394,9 @@ footer {
           <span class="meta-tag" id="feat-time"></span>
           <span class="meta-tag" id="feat-energy"></span>
           <span class="meta-tag" id="feat-category"></span>
+          <span class="meta-tag" id="feat-location"></span>
+          <span class="meta-tag" id="feat-social"></span>
+          <span class="meta-tag" id="feat-cost"></span>
         </div>
         <div class="card-actions">
           <button id="feat-save" class="icon-btn" title="Save to favorites">♡</button>
@@ -391,44 +419,69 @@ footer {
   </footer>
 
   <script>
-const ACTIVITIES = [
-  { id: 1, emoji: "🎨", title: "Doodle something random", desc: "Open a blank page and draw whatever comes to mind. No rules, no judgment — just let your hand move.", category: "creative", energy: "low", time: 5 },
-  { id: 2, emoji: "✍️", title: "Write a 6-word story", desc: "Challenge yourself to tell a complete story in exactly six words. Hemingway supposedly invented this.", category: "creative", energy: "low", time: 5 },
-  { id: 3, emoji: "📸", title: "Take interesting photos", desc: "Walk around your space and find 10 interesting shots. Look for light, texture, or odd angles.", category: "creative", energy: "medium", time: 30 },
-  { id: 4, emoji: "🎶", title: "Make a playlist", desc: "Build the perfect playlist for a mood or activity — a road trip, a rainy day, or a Monday morning.", category: "creative", energy: "low", time: 30 },
-  { id: 5, emoji: "🖊️", title: "Write a letter to future you", desc: "Seal it and set a reminder to open it in a year. What do you want to remember about today?", category: "creative", energy: "low", time: 30 },
-  { id: 6, emoji: "🎭", title: "Rewrite a movie ending", desc: "Pick any film and write an alternate ending. What would YOU have done differently?", category: "creative", energy: "low", time: 60 },
-  { id: 7, emoji: "🖼️", title: "Rearrange your space", desc: "Move furniture around, swap out decor, or just tidy and redecorate a single shelf.", category: "creative", energy: "high", time: 60 },
-  { id: 8, emoji: "🕺", title: "Have a solo dance party", desc: "Pick three of your favorite songs and dance like nobody's watching. Because nobody is.", category: "active", energy: "high", time: 5 },
-  { id: 9, emoji: "🧘", title: "Do a 10-min yoga flow", desc: "Search 'beginner yoga 10 minutes' and follow along. Your back will thank you.", category: "active", energy: "low", time: 5 },
-  { id: 10, emoji: "🚶", title: "Take a walk with no destination", desc: "Go outside and turn wherever feels right. No maps, no podcasts — just observe the world.", category: "active", energy: "medium", time: 30 },
-  { id: 11, emoji: "💪", title: "7-minute workout", desc: "The classic scientific 7-minute circuit: jumping jacks, wall sit, push-ups, crunches... full body, no gear.", category: "active", energy: "high", time: 5 },
-  { id: 12, emoji: "🤸", title: "Try 10 new stretches", desc: "Look up stretches you've never tried before. Focus on the spots that feel tight.", category: "active", energy: "low", time: 30 },
-  { id: 13, emoji: "🏃", title: "Run to one landmark and back", desc: "Pick something visible from your place — a park, a sign, a corner — and sprint there and back.", category: "active", energy: "high", time: 30 },
-  { id: 14, emoji: "📞", title: "Call someone you miss", desc: "Don't text. Actually call someone you haven't talked to in a while. Five minutes is enough.", category: "social", energy: "low", time: 5 },
-  { id: 15, emoji: "🎮", title: "Play an online game with a friend", desc: "Chess, Skribbl.io, Codenames — plenty of free multiplayer games that need zero setup.", category: "social", energy: "low", time: 30 },
-  { id: 16, emoji: "🍕", title: "Organize a spontaneous hangout", desc: "Text three people 'are you free in an hour?' and see what happens. Low effort, high reward.", category: "social", energy: "medium", time: 60 },
-  { id: 17, emoji: "💌", title: "Send an appreciation message", desc: "Text someone a specific thing you appreciate about them. Not a compliment — a genuine observation.", category: "social", energy: "low", time: 5 },
-  { id: 18, emoji: "🎲", title: "Start a group trivia quiz", desc: "Use a free app or just look up trivia questions and quiz your group chat.", category: "social", energy: "low", time: 30 },
-  { id: 19, emoji: "🌍", title: "Learn one fact about a random country", desc: "Pick a country at random on a map and read its Wikipedia intro. You'll end up knowing something genuinely interesting.", category: "learning", energy: "low", time: 5 },
-  { id: 20, emoji: "🧠", title: "Watch a TED talk", desc: "Pick a topic you know nothing about and watch a 10-15 minute TED talk on it.", category: "learning", energy: "low", time: 30 },
-  { id: 21, emoji: "🔤", title: "Learn 10 words in a new language", desc: "Use a free app or just a search. Try numbers, colors, or greetings in a language you've always wanted to speak.", category: "learning", energy: "low", time: 5 },
-  { id: 22, emoji: "📚", title: "Read the first chapter of a book", desc: "Grab a book you've been meaning to read. Commit to just the first chapter. That's it.", category: "learning", energy: "low", time: 30 },
-  { id: 23, emoji: "🍳", title: "Learn to cook one new dish", desc: "Find a simple recipe with ingredients you have and cook it. Doesn't have to be perfect.", category: "learning", energy: "medium", time: 60 },
-  { id: 24, emoji: "🎸", title: "Learn a simple song on an instrument", desc: "Even if you can't play, look up a 'beginner tutorial' for guitar, piano, or ukulele on YouTube.", category: "learning", energy: "medium", time: 60 },
-  { id: 25, emoji: "🔭", title: "Explore a Wikipedia rabbit hole", desc: "Open any Wikipedia article, click the first link in each article's body text, and keep going for 10 minutes.", category: "learning", energy: "low", time: 5 },
-  { id: 26, emoji: "🛁", title: "Take a long bath or shower", desc: "Light a candle, put on music, and stay in way longer than necessary. You deserve it.", category: "chill", energy: "low", time: 30 },
-  { id: 27, emoji: "📓", title: "Write in a journal", desc: "Free-write for 10 minutes. No topic, no structure — just write whatever comes to mind until time runs out.", category: "chill", energy: "low", time: 5 },
-  { id: 28, emoji: "🌿", title: "Sit outside and do nothing", desc: "Find a spot outside and sit for 10 minutes without your phone. Just look at stuff. It's surprisingly good.", category: "chill", energy: "low", time: 5 },
-  { id: 29, emoji: "🍵", title: "Make a fancy hot drink", desc: "Put real effort into a tea or coffee. Froth something, add a flavor, use the good mug.", category: "chill", energy: "low", time: 5 },
-  { id: 30, emoji: "🎬", title: "Watch a short film", desc: "Go to Vimeo Staff Picks and watch one short film. Usually under 20 minutes and often stunning.", category: "chill", energy: "low", time: 30 },
-  { id: 31, emoji: "🧩", title: "Do a puzzle", desc: "Physical jigsaw or digital — either way, it's oddly satisfying and kills time perfectly.", category: "chill", energy: "low", time: 60 },
-  { id: 32, emoji: "😴", title: "Take a power nap", desc: "Set a timer for 20 minutes. Lie down, close your eyes. You might not sleep and that's fine.", category: "chill", energy: "low", time: 30 },
-  { id: 33, emoji: "🌙", title: "Plan your ideal trip", desc: "Pick a destination you'll probably never go to and plan the whole trip: flights, hotels, itinerary. Treat it seriously.", category: "chill", energy: "low", time: 60 },
+var ACTIVITIES = [
+  // Creative
+  { id: 1,  emoji: "🎨", title: "Doodle something random",           desc: "Open a blank page and draw whatever comes to mind. No rules, no judgment — just let your hand move.",                                     category: "creative", energy: "low",    time: 5,  location: "indoor",  social: "solo",  cost: "free" },
+  { id: 2,  emoji: "✍️", title: "Write a 6-word story",              desc: "Challenge yourself to tell a complete story in exactly six words. Hemingway supposedly invented this.",                                     category: "creative", energy: "low",    time: 5,  location: "indoor",  social: "solo",  cost: "free" },
+  { id: 3,  emoji: "📸", title: "Take interesting photos",           desc: "Walk around your space and find 10 interesting shots. Look for light, texture, or odd angles.",                                           category: "creative", energy: "medium", time: 30, location: "either",  social: "solo",  cost: "free" },
+  { id: 4,  emoji: "🎶", title: "Make a playlist",                   desc: "Build the perfect playlist for a mood — a road trip, a rainy day, or a Monday morning.",                                                  category: "creative", energy: "low",    time: 30, location: "indoor",  social: "solo",  cost: "free" },
+  { id: 5,  emoji: "🖊️", title: "Write a letter to future you",      desc: "Seal it and set a reminder to open it in a year. What do you want to remember about today?",                                             category: "creative", energy: "low",    time: 30, location: "indoor",  social: "solo",  cost: "free" },
+  { id: 6,  emoji: "🎭", title: "Rewrite a movie ending",            desc: "Pick any film and write an alternate ending. What would YOU have done differently?",                                                      category: "creative", energy: "low",    time: 60, location: "indoor",  social: "solo",  cost: "free" },
+  { id: 7,  emoji: "🖼️", title: "Rearrange your space",              desc: "Move furniture around, swap out decor, or just tidy and redecorate a single shelf.",                                                     category: "creative", energy: "high",   time: 60, location: "indoor",  social: "solo",  cost: "free" },
+  { id: 8,  emoji: "🎨", title: "Try painting by numbers",           desc: "Grab a kit from a shop or print a template online. Meditative, satisfying, and you end up with actual art.",                             category: "creative", energy: "low",    time: 60, location: "indoor",  social: "solo",  cost: "low"  },
+  { id: 9,  emoji: "🗂️", title: "Redesign your phone home screen",   desc: "Pick a new wallpaper, reorganise apps into folders, change your icon pack. Make it feel new again.",                                     category: "creative", energy: "low",    time: 30, location: "indoor",  social: "solo",  cost: "free" },
+  { id: 10, emoji: "📦", title: "Try origami",                       desc: "Look up a beginner tutorial for a crane or a box. Requires nothing but paper and about 20 minutes of focus.",                            category: "creative", energy: "low",    time: 30, location: "indoor",  social: "solo",  cost: "free" },
+  // Active
+  { id: 11, emoji: "🕺", title: "Have a solo dance party",           desc: "Pick three of your favourite songs and dance like nobody's watching. Because nobody is.",                                                 category: "active",   energy: "high",   time: 5,  location: "indoor",  social: "solo",  cost: "free" },
+  { id: 12, emoji: "🧘", title: "Do a 10-min yoga flow",             desc: "Search 'beginner yoga 10 minutes' and follow along. Your back will thank you.",                                                          category: "active",   energy: "low",    time: 5,  location: "indoor",  social: "solo",  cost: "free" },
+  { id: 13, emoji: "🚶", title: "Take a walk with no destination",   desc: "Go outside and turn wherever feels right. No maps, no podcasts — just observe the world.",                                               category: "active",   energy: "medium", time: 30, location: "outdoor", social: "solo",  cost: "free" },
+  { id: 14, emoji: "💪", title: "7-minute workout",                  desc: "The classic scientific 7-minute circuit: jumping jacks, wall sit, push-ups, crunches — full body, no gear.",                             category: "active",   energy: "high",   time: 5,  location: "indoor",  social: "solo",  cost: "free" },
+  { id: 15, emoji: "🤸", title: "Try 10 new stretches",              desc: "Look up stretches you've never tried before. Focus on the spots that feel tight.",                                                       category: "active",   energy: "low",    time: 30, location: "indoor",  social: "solo",  cost: "free" },
+  { id: 16, emoji: "🏃", title: "Run to one landmark and back",      desc: "Pick something visible from your place — a park, a sign, a corner — and sprint there and back.",                                        category: "active",   energy: "high",   time: 30, location: "outdoor", social: "solo",  cost: "free" },
+  { id: 17, emoji: "🚴", title: "Go for a bike ride",                desc: "No destination needed. Just ride for 30 minutes and see where you end up. Good for the body and the brain.",                            category: "active",   energy: "medium", time: 60, location: "outdoor", social: "solo",  cost: "free" },
+  { id: 18, emoji: "🏊", title: "Go for a swim",                     desc: "Find a local pool or open water spot. Even 20 lengths is enough to completely reset your headspace.",                                    category: "active",   energy: "high",   time: 60, location: "outdoor", social: "solo",  cost: "low"  },
+  { id: 19, emoji: "🤹", title: "Learn to juggle",                   desc: "Start with two balls, then three. There are solid tutorials on YouTube. It takes a week to get decent — start today.",                  category: "active",   energy: "medium", time: 30, location: "indoor",  social: "solo",  cost: "free" },
+  // Social
+  { id: 20, emoji: "📞", title: "Call someone you miss",             desc: "Don't text. Actually call someone you haven't talked to in a while. Five minutes is enough.",                                            category: "social",   energy: "low",    time: 5,  location: "indoor",  social: "solo",  cost: "free" },
+  { id: 21, emoji: "🎮", title: "Play an online game with a friend", desc: "Chess, Skribbl.io, Codenames — plenty of free multiplayer games that need zero setup.",                                                  category: "social",   energy: "low",    time: 30, location: "indoor",  social: "group", cost: "free" },
+  { id: 22, emoji: "🍕", title: "Organise a spontaneous hangout",    desc: "Text three people 'are you free in an hour?' and see what happens. Low effort, high reward.",                                            category: "social",   energy: "medium", time: 60, location: "either",  social: "group", cost: "low"  },
+  { id: 23, emoji: "💌", title: "Send an appreciation message",      desc: "Text someone a specific thing you appreciate about them. Not a compliment — a genuine observation.",                                     category: "social",   energy: "low",    time: 5,  location: "indoor",  social: "solo",  cost: "free" },
+  { id: 24, emoji: "🎲", title: "Start a group trivia quiz",         desc: "Use a free app or just look up trivia questions and quiz your group chat. Surprisingly competitive.",                                    category: "social",   energy: "low",    time: 30, location: "indoor",  social: "group", cost: "free" },
+  { id: 25, emoji: "🎳", title: "Play a board game",                 desc: "Pull out a game that hasn't been touched in a year and rope in whoever's around. Low stakes, high fun.",                                 category: "social",   energy: "low",    time: 60, location: "indoor",  social: "group", cost: "free" },
+  { id: 26, emoji: "🎤", title: "Do karaoke at home",                desc: "Find a YouTube karaoke playlist, pick a ridiculous song, and commit completely. Solo or as a group, equally chaotic.",                  category: "social",   energy: "high",   time: 30, location: "indoor",  social: "group", cost: "free" },
+  { id: 27, emoji: "🌳", title: "Visit a local market or event",     desc: "Check what's on near you — a farmers market, a car boot sale, a street festival. Free to browse, low pressure.",                       category: "social",   energy: "medium", time: 60, location: "outdoor", social: "group", cost: "free" },
+  // Learning
+  { id: 28, emoji: "🌍", title: "Learn one fact about a random country", desc: "Pick a country at random on a map and read its Wikipedia intro. You'll end up knowing something genuinely interesting.",            category: "learning", energy: "low",    time: 5,  location: "indoor",  social: "solo",  cost: "free" },
+  { id: 29, emoji: "🧠", title: "Watch a TED talk",                  desc: "Pick a topic you know nothing about and watch a 10-15 minute TED talk on it.",                                                          category: "learning", energy: "low",    time: 30, location: "indoor",  social: "solo",  cost: "free" },
+  { id: 30, emoji: "🔤", title: "Learn 10 words in a new language",  desc: "Use a free app or just search. Try numbers, colours, or greetings in a language you've always wanted to speak.",                       category: "learning", energy: "low",    time: 5,  location: "indoor",  social: "solo",  cost: "free" },
+  { id: 31, emoji: "📚", title: "Read the first chapter of a book",  desc: "Grab a book you've been meaning to read. Commit to just the first chapter. That's it.",                                                 category: "learning", energy: "low",    time: 30, location: "indoor",  social: "solo",  cost: "free" },
+  { id: 32, emoji: "🍳", title: "Cook one new dish",                 desc: "Find a recipe with ingredients you have and cook it. Doesn't have to be perfect — first attempts rarely are.",                          category: "learning", energy: "medium", time: 60, location: "indoor",  social: "either",cost: "low"  },
+  { id: 33, emoji: "🎸", title: "Learn a simple song on an instrument", desc: "Even if you can't play, look up a 'beginner tutorial' for guitar, piano, or ukulele on YouTube.",                                   category: "learning", energy: "medium", time: 60, location: "indoor",  social: "solo",  cost: "free" },
+  { id: 34, emoji: "🔭", title: "Explore a Wikipedia rabbit hole",   desc: "Open any Wikipedia article, click the first link in each article's body, and keep going for 10 minutes.",                               category: "learning", energy: "low",    time: 5,  location: "indoor",  social: "solo",  cost: "free" },
+  { id: 35, emoji: "🪄", title: "Learn a magic trick",               desc: "Pick one trick and watch a tutorial until you can do it without looking. A good one takes 20 minutes to learn and will impress people forever.", category: "learning", energy: "low", time: 30, location: "indoor", social: "solo", cost: "free" },
+  { id: 36, emoji: "🏛️", title: "Visit a museum or gallery",         desc: "Most cities have free or cheap museums. Pick one you've never been to and give yourself two hours with no agenda.",                     category: "learning", energy: "medium", time: 60, location: "outdoor", social: "either",cost: "low"  },
+  { id: 37, emoji: "🍞", title: "Learn to bake something",           desc: "Pick a simple recipe — banana bread, cookies, a basic loaf. The process is satisfying and you get something to eat.",                   category: "learning", energy: "medium", time: 60, location: "indoor",  social: "either",cost: "low"  },
+  // Chill
+  { id: 38, emoji: "🛁", title: "Take a long bath or shower",        desc: "Light a candle, put on music, and stay in way longer than necessary. You deserve it.",                                                   category: "chill",    energy: "low",    time: 30, location: "indoor",  social: "solo",  cost: "free" },
+  { id: 39, emoji: "📓", title: "Write in a journal",                desc: "Free-write for 10 minutes. No topic, no structure — just write whatever comes to mind until time runs out.",                            category: "chill",    energy: "low",    time: 5,  location: "indoor",  social: "solo",  cost: "free" },
+  { id: 40, emoji: "🌿", title: "Sit outside and do nothing",        desc: "Find a spot outside and sit for 10 minutes without your phone. Just look at stuff. It's surprisingly good.",                            category: "chill",    energy: "low",    time: 5,  location: "outdoor", social: "solo",  cost: "free" },
+  { id: 41, emoji: "🍵", title: "Make a fancy hot drink",            desc: "Put real effort into a tea or coffee. Froth something, add a flavour, use the good mug.",                                               category: "chill",    energy: "low",    time: 5,  location: "indoor",  social: "solo",  cost: "free" },
+  { id: 42, emoji: "🎬", title: "Watch a short film",                desc: "Go to Vimeo Staff Picks and watch one short film. Usually under 20 minutes and often stunning.",                                        category: "chill",    energy: "low",    time: 30, location: "indoor",  social: "solo",  cost: "free" },
+  { id: 43, emoji: "🧩", title: "Do a puzzle",                       desc: "Physical jigsaw or digital — either way, it's oddly satisfying and kills time perfectly.",                                              category: "chill",    energy: "low",    time: 60, location: "indoor",  social: "solo",  cost: "free" },
+  { id: 44, emoji: "😴", title: "Take a power nap",                  desc: "Set a timer for 20 minutes. Lie down, close your eyes. You might not sleep and that's fine.",                                          category: "chill",    energy: "low",    time: 30, location: "indoor",  social: "solo",  cost: "free" },
+  { id: 45, emoji: "🌙", title: "Plan your ideal trip",              desc: "Pick a destination you'll probably never go to and plan the whole thing: flights, hotels, itinerary. Treat it seriously.",              category: "chill",    energy: "low",    time: 60, location: "indoor",  social: "solo",  cost: "free" },
+  { id: 46, emoji: "⭐", title: "Go stargazing",                     desc: "Head somewhere with low light pollution, lie on your back, and try to spot constellations. Bring a blanket.",                           category: "chill",    energy: "low",    time: 30, location: "outdoor", social: "either",cost: "free" },
+  { id: 47, emoji: "🌅", title: "Watch the sunrise or sunset",       desc: "Pick a spot with a good view and just sit with it. No photos needed — just watch it happen.",                                           category: "chill",    energy: "low",    time: 30, location: "outdoor", social: "either",cost: "free" },
+  { id: 48, emoji: "☕", title: "People-watch at a cafe",            desc: "Order one thing and sit somewhere with a good view of the room. No phone. Just observe. It's endlessly interesting.",                   category: "chill",    energy: "low",    time: 60, location: "outdoor", social: "solo",  cost: "low"  },
+  { id: 49, emoji: "🕯️", title: "Do a digital detox hour",          desc: "Put your phone face down, turn off the TV, and sit with just music or silence for an hour. Harder than it sounds.",                    category: "chill",    energy: "low",    time: 60, location: "indoor",  social: "solo",  cost: "free" },
+  { id: 50, emoji: "🌺", title: "Tend to a plant",                   desc: "Water it, repot it, or just wipe the dust off the leaves. If you don't have one, look up which plant suits your home.",                category: "chill",    energy: "low",    time: 5,  location: "indoor",  social: "solo",  cost: "free" },
 ];
 
 var TIME_LABEL = { 5: "~5 min", 30: "~30 min", 60: "1 hr+" };
 var ENERGY_LABEL = { low: "Low energy 😪", medium: "Medium energy 🙂", high: "High energy 🔥" };
+var LOCATION_LABEL = { indoor: "Indoors 🏠", outdoor: "Outdoors 🌳", either: "Anywhere" };
+var SOCIAL_LABEL = { solo: "Solo 🙋", group: "With others 👥", either: "Either" };
+var COST_LABEL = { free: "Free 🆓", low: "Cheap 💸", paid: "Costs money 💳" };
 
 var favorites = [];
 try { favorites = JSON.parse(localStorage.getItem("boredom-faves") || "[]"); } catch(e) {}
@@ -447,13 +500,19 @@ function getActiveFilter(groupId) {
 }
 
 function getFiltered() {
-  var energy = getActiveFilter("energy-filter");
-  var time = getActiveFilter("time-filter");
+  var energy   = getActiveFilter("energy-filter");
+  var time     = getActiveFilter("time-filter");
   var category = getActiveFilter("category-filter");
+  var location = getActiveFilter("location-filter");
+  var social   = getActiveFilter("social-filter");
+  var cost     = getActiveFilter("cost-filter");
   return ACTIVITIES.filter(function(a) {
-    if (energy !== "all" && a.energy !== energy) return false;
-    if (time !== "all" && a.time !== Number(time)) return false;
-    if (category !== "all" && a.category !== category) return false;
+    if (energy   !== "all" && a.energy   !== energy)         return false;
+    if (time     !== "all" && a.time     !== Number(time))   return false;
+    if (category !== "all" && a.category !== category)       return false;
+    if (location !== "all" && a.location !== location && a.location !== "either") return false;
+    if (social   !== "all" && a.social   !== social   && a.social   !== "either") return false;
+    if (cost     !== "all" && a.cost     !== cost)           return false;
     return true;
   });
 }
@@ -466,6 +525,9 @@ function renderFeatured(activity) {
   document.getElementById("feat-time").textContent = TIME_LABEL[activity.time];
   document.getElementById("feat-energy").textContent = ENERGY_LABEL[activity.energy];
   document.getElementById("feat-category").textContent = activity.category.charAt(0).toUpperCase() + activity.category.slice(1);
+  document.getElementById("feat-location").textContent = LOCATION_LABEL[activity.location];
+  document.getElementById("feat-social").textContent = SOCIAL_LABEL[activity.social];
+  document.getElementById("feat-cost").textContent = COST_LABEL[activity.cost];
   var saveBtn = document.getElementById("feat-save");
   saveBtn.textContent = isSaved(activity.id) ? "❤️" : "♡";
   saveBtn.className = "icon-btn" + (isSaved(activity.id) ? " saved" : "");
