@@ -629,7 +629,7 @@ document.getElementById("feat-save").addEventListener("click", function() {
   renderGrid();
 });
 
-document.getElementById("feat-next").addEventListener("click", function() {
+function showDiscoverSuggestion() {
   var pool = getFiltered();
   if (!pool.length) return;
   discoverCurrent = pool[Math.floor(Math.random() * pool.length)];
@@ -639,9 +639,11 @@ document.getElementById("feat-next").addEventListener("click", function() {
     category: "feat-category", location: "feat-location",
     social: "feat-social", cost: "feat-cost", save: "feat-save"
   }, discoverCurrent);
-});
+}
 
-/* Filter buttons for Discover */
+document.getElementById("feat-next").addEventListener("click", showDiscoverSuggestion);
+
+/* Filter buttons for Discover — auto-suggest on selection */
 var allFilterBtns = document.querySelectorAll("#page-discover .filter-btn");
 for (var i = 0; i < allFilterBtns.length; i++) {
   (function(btn) {
@@ -651,6 +653,7 @@ for (var i = 0; i < allFilterBtns.length; i++) {
       for (var j = 0; j < siblings.length; j++) siblings[j].classList.remove("active");
       btn.classList.add("active");
       renderGrid();
+      showDiscoverSuggestion();
     });
   })(allFilterBtns[i]);
 }
