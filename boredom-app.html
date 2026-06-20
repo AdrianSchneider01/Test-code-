@@ -7,6 +7,11 @@
   <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+html {
+  height: auto;
+  overflow-y: scroll;
+}
+
 :root {
   --bg: #0f0f1a;
   --surface: #1a1a2e;
@@ -23,7 +28,8 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: 'Segoe UI', system-ui, sans-serif;
-  min-height: 100vh;
+  height: auto;
+  overflow: visible;
 }
 
 header {
