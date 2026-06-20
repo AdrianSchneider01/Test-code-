@@ -524,10 +524,11 @@ function renderFavorites() {
 function setupFilters() {
   ["energy-filter", "time-filter", "category-filter"].forEach(groupId => {
     const key = groupId.split("-")[0];
-    document.getElementById(groupId).addEventListener("click", (e) => {
+    const group = document.getElementById(groupId);
+    group.addEventListener("click", (e) => {
       const btn = e.target.closest(".filter-btn");
       if (!btn) return;
-      document.querySelectorAll(`#${groupId} .filter-btn`).forEach(b => b.classList.remove("active"));
+      group.querySelectorAll(".filter-btn").forEach(b => b.classList.remove("active"));
       btn.classList.add("active");
       filters[key] = btn.dataset.value;
       renderGrid();
