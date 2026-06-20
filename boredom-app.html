@@ -427,16 +427,17 @@ const ACTIVITIES = [
   { id: 33, emoji: "🌙", title: "Plan your ideal trip", desc: "Pick a destination you'll probably never go to and plan the whole trip: flights, hotels, itinerary. Treat it seriously.", category: "chill", energy: "low", time: 60 },
 ];
 
-const TIME_LABEL = { 5: "~5 min", 30: "~30 min", 60: "1 hr+" };
-const ENERGY_LABEL = { low: "Low energy 😪", medium: "Medium energy 🙂", high: "High energy 🔥" };
+var TIME_LABEL = { 5: "~5 min", 30: "~30 min", 60: "1 hr+" };
+var ENERGY_LABEL = { low: "Low energy 😪", medium: "Medium energy 🙂", high: "High energy 🔥" };
 
-let favorites = JSON.parse(localStorage.getItem("boredom-faves") || "[]");
-let currentFeatured = null;
+var favorites = [];
+try { favorites = JSON.parse(localStorage.getItem("boredom-faves") || "[]"); } catch(e) {}
+var currentFeatured = null;
 
-function saveFavorites() { localStorage.setItem("boredom-faves", JSON.stringify(favorites)); }
-function isSaved(id) { return favorites.includes(id); }
+function saveFavorites() { try { localStorage.setItem("boredom-faves", JSON.stringify(favorites)); } catch(e) {} }
+function isSaved(id) { return favorites.indexOf(id) !== -1; }
 function toggleFave(id) {
-  favorites = isSaved(id) ? favorites.filter(f => f !== id) : [...favorites, id];
+  favorites = isSaved(id) ? favorites.filter(function(f) { return f !== id; }) : favorites.concat([id]);
   saveFavorites();
 }
 
@@ -458,17 +459,17 @@ function getFiltered() {
 }
 
 function renderFeatured(activity) {
-  const card = document.getElementById("featured-card");
+  var card = document.getElementById("featured-card");
   document.getElementById("feat-emoji").textContent = activity.emoji;
   document.getElementById("feat-title").textContent = activity.title;
   document.getElementById("feat-desc").textContent = activity.desc;
   document.getElementById("feat-time").textContent = TIME_LABEL[activity.time];
   document.getElementById("feat-energy").textContent = ENERGY_LABEL[activity.energy];
   document.getElementById("feat-category").textContent = activity.category.charAt(0).toUpperCase() + activity.category.slice(1);
-  const saveBtn = document.getElementById("feat-save");
+  var saveBtn = document.getElementById("feat-save");
   saveBtn.textContent = isSaved(activity.id) ? "❤️" : "♡";
   saveBtn.className = "icon-btn" + (isSaved(activity.id) ? " saved" : "");
-  saveBtn.onclick = () => { toggleFave(activity.id); renderFeatured(activity); renderGrid(); renderFavorites(); };
+  saveBtn.onclick = function() { toggleFave(activity.id); renderFeatured(activity); renderGrid(); renderFavorites(); };
   card.classList.remove("hidden");
   card.style.animation = "none";
   void card.offsetHeight;
@@ -477,55 +478,57 @@ function renderFeatured(activity) {
 }
 
 function surpriseMe() {
-  const pool = getFiltered();
+  var pool = getFiltered();
   if (!pool.length) return;
   renderFeatured(pool[Math.floor(Math.random() * pool.length)]);
 }
 
 function makeActivityCard(activity) {
-  const card = document.createElement("div");
+  var card = document.createElement("div");
   card.className = "activity-card";
-  card.innerHTML = `
-    <span class="emoji">${activity.emoji}</span>
-    <h3>${activity.title}</h3>
-    <p>${activity.desc}</p>
-    <div class="card-meta">
-      <span class="meta-tag">${TIME_LABEL[activity.time]}</span>
-      <span class="meta-tag">${activity.category}</span>
-    </div>
-    <button class="save-btn ${isSaved(activity.id) ? "saved" : ""}" title="Save to favorites">${isSaved(activity.id) ? "❤️" : "🤍"}</button>
-  `;
-  card.querySelector(".save-btn").addEventListener("click", (e) => {
+  var saved = isSaved(activity.id);
+  card.innerHTML =
+    '<span class="emoji">' + activity.emoji + '</span>' +
+    '<h3>' + activity.title + '</h3>' +
+    '<p>' + activity.desc + '</p>' +
+    '<div class="card-meta">' +
+      '<span class="meta-tag">' + TIME_LABEL[activity.time] + '</span>' +
+      '<span class="meta-tag">' + activity.category + '</span>' +
+    '</div>' +
+    '<button class="save-btn' + (saved ? ' saved' : '') + '" title="Save to favorites">' + (saved ? '❤️' : '🤍') + '</button>';
+  card.querySelector(".save-btn").addEventListener("click", function(e) {
     e.stopPropagation();
     toggleFave(activity.id);
     renderGrid(); renderFavorites();
     if (currentFeatured && currentFeatured.id === activity.id) renderFeatured(activity);
   });
-  card.addEventListener("click", () => renderFeatured(activity));
+  card.addEventListener("click", function() { renderFeatured(activity); });
   return card;
 }
 
 function renderGrid() {
-  const grid = document.getElementById("activity-grid");
+  var grid = document.getElementById("activity-grid");
   grid.innerHTML = "";
-  const items = getFiltered();
+  var items = getFiltered();
   if (!items.length) {
-    const msg = document.createElement("p");
+    var msg = document.createElement("p");
     msg.className = "no-results";
     msg.textContent = "No activities match your filters. Try broadening them!";
     grid.appendChild(msg);
     return;
   }
-  items.forEach(a => grid.appendChild(makeActivityCard(a)));
+  for (var i = 0; i < items.length; i++) { grid.appendChild(makeActivityCard(items[i])); }
 }
 
 function renderFavorites() {
-  const section = document.getElementById("favorites-section");
-  const grid = document.getElementById("favorites-grid");
+  var section = document.getElementById("favorites-section");
+  var grid = document.getElementById("favorites-grid");
   grid.innerHTML = "";
   if (!favorites.length) { section.classList.add("hidden"); return; }
   section.classList.remove("hidden");
-  ACTIVITIES.filter(a => favorites.includes(a.id)).forEach(a => grid.appendChild(makeActivityCard(a)));
+  for (var i = 0; i < ACTIVITIES.length; i++) {
+    if (isSaved(ACTIVITIES[i].id)) grid.appendChild(makeActivityCard(ACTIVITIES[i]));
+  }
 }
 
 function setupFilters() {
@@ -547,7 +550,7 @@ function setupFilters() {
 
 document.getElementById("surprise-btn").addEventListener("click", surpriseMe);
 document.getElementById("feat-next").addEventListener("click", surpriseMe);
-document.getElementById("clear-faves").addEventListener("click", () => {
+document.getElementById("clear-faves").addEventListener("click", function() {
   favorites = []; saveFavorites(); renderGrid(); renderFavorites();
   if (currentFeatured) renderFeatured(currentFeatured);
 });
