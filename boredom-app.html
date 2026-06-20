@@ -6,6 +6,7 @@
   <title>Best Boredom App</title>
   <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: auto; overflow-y: auto; }
 
 :root {
   --bg: #0f0f1a;
@@ -639,6 +640,10 @@ function showDiscoverSuggestion() {
     category: "feat-category", location: "feat-location",
     social: "feat-social", cost: "feat-cost", save: "feat-save"
   }, discoverCurrent);
+  var card = document.getElementById("featured-card");
+  if (card.scrollIntoView) {
+    card.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
 }
 
 document.getElementById("feat-next").addEventListener("click", showDiscoverSuggestion);
