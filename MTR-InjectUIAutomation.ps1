@@ -17,15 +17,16 @@
       4. Reading the result JSON written by the helper
       5. Optionally emailing the result via SMTP
 
-    The inline C# P/Invoke code handles the Win32 API calls that are not
-    exposed through .NET natively.
+    Before running, create a Teams meeting manually in Outlook and copy the
+    Join URL from the invite. Pass it as -JoinUrl.
 
-.PARAMETER MeetingInfoFile
-    Path to the JSON file produced by MTR-CreateTestMeeting.ps1.
-    Must be accessible from the MTR (local path or UNC share).
+.PARAMETER JoinUrl
+    The Teams meeting Join URL copied from the Outlook invite.
+    Example: https://teams.microsoft.com/l/meetup-join/...
 
 .PARAMETER HelperScriptPath
     Full local path to MTR-TestCallHelper.ps1 on the MTR.
+    Example: C:\MTR\MTR-TestCallHelper.ps1
 
 .PARAMETER ResultFile
     Path where MTR-TestCallHelper.ps1 will write its result JSON.
@@ -58,28 +59,27 @@
 
 .EXAMPLE
     .\MTR-InjectUIAutomation.ps1 `
-        -MeetingInfoFile   "C:\MTR\TestMeetingInfo.json" `
-        -HelperScriptPath  "C:\MTR\MTR-TestCallHelper.ps1" `
-        -ResultFile        "C:\MTR\TestCallResult.json" `
-        -SmtpServer        "smtp.gmail.com" `
-        -SmtpPort          587 `
-        -SmtpUser          "alerts@example.com" `
-        -SmtpPassword      "app-password-here" `
-        -MailFrom          "alerts@example.com" `
-        -MailTo            "itteam@example.com" `
-        -RoomName          "Boardroom MTR"
+        -JoinUrl          "https://teams.microsoft.com/l/meetup-join/..." `
+        -HelperScriptPath "C:\MTR\MTR-TestCallHelper.ps1" `
+        -SmtpServer       "smtp.gmail.com" `
+        -SmtpPort         587 `
+        -SmtpUser         "alerts@example.com" `
+        -SmtpPassword     "app-password-here" `
+        -MailFrom         "alerts@example.com" `
+        -MailTo           "itteam@example.com" `
+        -RoomName         "Boardroom MTR"
 #>
 
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)]
-    [string]$MeetingInfoFile,
+    [string]$JoinUrl,
 
     [Parameter(Mandatory)]
     [string]$HelperScriptPath,
 
-    [string]$ResultFile            = "C:\MTR\TestCallResult.json",
-    [int]   $HelperTimeoutSeconds  = 180,
+    [string]$ResultFile           = "C:\MTR\TestCallResult.json",
+    [int]   $HelperTimeoutSeconds = 180,
 
     # SMTP / email (all optional — skip email if SmtpServer is empty)
     [string]$SmtpServer   = "",
@@ -158,7 +158,6 @@ namespace MTR
         [DllImport("kernel32.dll", SetLastError = true)]
         public static extern bool GetExitCodeProcess(IntPtr hProcess, out uint lpExitCode);
 
-        // advapi32 — duplicate token so we can set its session
         [DllImport("advapi32.dll", SetLastError = true)]
         public static extern bool DuplicateTokenEx(
             IntPtr hExistingToken,
@@ -169,15 +168,14 @@ namespace MTR
             out IntPtr phNewToken
         );
 
-        public const uint MAXIMUM_ALLOWED       = 0x02000000;
+        public const uint MAXIMUM_ALLOWED           = 0x02000000;
         public const uint CREATE_UNICODE_ENVIRONMENT = 0x00000400;
-        public const uint CREATE_NO_WINDOW      = 0x08000000;
-        public const uint NORMAL_PRIORITY_CLASS = 0x00000020;
-        public const uint WAIT_TIMEOUT          = 0x00000102;
-        public const uint STILL_ACTIVE          = 259;
+        public const uint NORMAL_PRIORITY_CLASS      = 0x00000020;
+        public const uint WAIT_TIMEOUT               = 0x00000102;
+        public const uint STILL_ACTIVE               = 259;
 
-        public const int SecurityImpersonation  = 2;
-        public const int TokenPrimary           = 1;
+        public const int SecurityImpersonation = 2;
+        public const int TokenPrimary          = 1;
 
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
         public struct STARTUPINFO
@@ -217,28 +215,25 @@ namespace MTR
 
             try
             {
-                // Get the user token for the target session
                 if (!WTSQueryUserToken(sessionId, out userToken))
                     throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error(),
                         "WTSQueryUserToken failed for session " + sessionId);
 
-                // Convert impersonation token -> primary token
                 if (!DuplicateTokenEx(userToken, MAXIMUM_ALLOWED, IntPtr.Zero,
                         SecurityImpersonation, TokenPrimary, out primaryToken))
                     throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error(),
                         "DuplicateTokenEx failed");
 
-                // Build the user's environment block
                 if (!CreateEnvironmentBlock(out envBlock, primaryToken, false))
-                    envBlock = IntPtr.Zero; // non-fatal, proceed without custom env
+                    envBlock = IntPtr.Zero;
 
                 var si = new STARTUPINFO();
                 si.cb        = Marshal.SizeOf(si);
                 si.lpDesktop = @"winsta0\default";
 
                 PROCESS_INFORMATION pi;
-                uint flags = CREATE_UNICODE_ENVIRONMENT | NORMAL_PRIORITY_CLASS;
-                if (envBlock == IntPtr.Zero) flags &= ~CREATE_UNICODE_ENVIRONMENT;
+                uint flags = NORMAL_PRIORITY_CLASS;
+                if (envBlock != IntPtr.Zero) flags |= CREATE_UNICODE_ENVIRONMENT;
 
                 bool created = CreateProcessAsUser(
                     primaryToken,
@@ -260,7 +255,6 @@ namespace MTR
 
                 CloseHandle(pi.hThread);
 
-                // Wait for process to finish
                 uint waitResult = WaitForSingleObject(pi.hProcess, timeoutMs);
                 uint exitCode   = STILL_ACTIVE;
                 GetExitCodeProcess(pi.hProcess, out exitCode);
@@ -275,9 +269,9 @@ namespace MTR
             }
             finally
             {
-                if (envBlock    != IntPtr.Zero) DestroyEnvironmentBlock(envBlock);
+                if (envBlock     != IntPtr.Zero) DestroyEnvironmentBlock(envBlock);
                 if (primaryToken != IntPtr.Zero) CloseHandle(primaryToken);
-                if (userToken   != IntPtr.Zero) CloseHandle(userToken);
+                if (userToken    != IntPtr.Zero) CloseHandle(userToken);
             }
         }
     }
@@ -296,43 +290,25 @@ if (-not ([System.Management.Automation.PSTypeName]'MTR.SessionBridge').Type) {
 # 1. Validate inputs
 # ---------------------------------------------------------------------------
 Write-Log "Starting MTR-InjectUIAutomation on $RoomName"
+Write-Log "Join URL: $JoinUrl"
 
-if (-not (Test-Path $MeetingInfoFile)) {
-    Write-Log "Meeting info file not found: $MeetingInfoFile" "ERROR"
-    exit 1
-}
 if (-not (Test-Path $HelperScriptPath)) {
     Write-Log "Helper script not found: $HelperScriptPath" "ERROR"
     exit 1
 }
-
-$meetingInfo = Get-Content $MeetingInfoFile -Raw | ConvertFrom-Json
-$joinUrl     = $meetingInfo.JoinUrl
-
-if ([string]::IsNullOrWhiteSpace($joinUrl)) {
-    Write-Log "JoinUrl is empty in meeting info file." "ERROR"
-    exit 1
-}
-Write-Log "Join URL: $joinUrl"
 
 # ---------------------------------------------------------------------------
 # 2. Find the Skype user's active session ID
 # ---------------------------------------------------------------------------
 Write-Log "Enumerating active Windows sessions..."
 
-# Use qwinsta / query session output to find the Skype session
 $sessionId = $null
 
 try {
     $qwinsta = & qwinsta 2>&1
     foreach ($line in $qwinsta) {
-        # Lines look like: ">console   Skype   1  Active  ..." or similar
         if ($line -match '\bSkype\b' -and $line -match '\bActive\b') {
-            # Extract session ID (3rd whitespace token)
-            $parts = $line.Trim() -split '\s+'
-            # qwinsta columns: SESSIONNAME USERNAME ID STATE TYPE DEVICE
-            # The ID column index varies depending on whether a username appears
-            foreach ($part in $parts) {
+            foreach ($part in ($line.Trim() -split '\s+')) {
                 if ($part -match '^\d+$') {
                     $sessionId = [uint32]$part
                     break
@@ -341,30 +317,10 @@ try {
         }
     }
 } catch {
-    Write-Log "qwinsta failed, falling back to WMI: $_" "WARN"
+    Write-Log "qwinsta failed: $_" "WARN"
 }
 
-if ($null -eq $sessionId) {
-    # WMI fallback
-    $wmiSessions = Get-WmiObject -Class Win32_LogonSession |
-        Where-Object { $_.LogonType -in @(2,10,11) } | # Interactive / RemoteInteractive / CachedInteractive
-        Select-Object -ExpandProperty LogonId
-
-    foreach ($lid in $wmiSessions) {
-        $wmiUser = Get-WmiObject -Class Win32_LoggedOnUser |
-            Where-Object { $_.Dependent -match "LogonId=`"$lid`"" }
-        if ($wmiUser -and ($wmiUser.Antecedent -match 'Name="Skype"')) {
-            # Map logon session to Windows session — approximation via Explorer owner
-            $explorerProcs = Get-Process -Name explorer -ErrorAction SilentlyContinue
-            if ($explorerProcs) {
-                $sessionId = $explorerProcs[0].SessionId
-            }
-            break
-        }
-    }
-}
-
-# Final fallback: assume Session 1 (typical for MTR single-user setup)
+# Final fallback: Session 1 is always the first interactive session on a single-user MTR
 if ($null -eq $sessionId) {
     Write-Log "Could not auto-detect Skype session; defaulting to Session 1." "WARN"
     $sessionId = [uint32]1
@@ -375,20 +331,22 @@ Write-Log "Target session ID: $sessionId"
 # ---------------------------------------------------------------------------
 # 3. Build the command line for the helper script
 # ---------------------------------------------------------------------------
-$psExe     = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
-$cmdLine   = "powershell.exe -NonInteractive -ExecutionPolicy Bypass " +
-             "-File `"$HelperScriptPath`" " +
-             "-JoinUrl `"$joinUrl`" " +
-             "-ResultFile `"$ResultFile`""
+# Escape the Join URL in case it contains special characters
+$escapedUrl = $JoinUrl -replace '"', '\"'
 
-Write-Log "Command line: $cmdLine"
+$cmdLine = "powershell.exe -NonInteractive -ExecutionPolicy Bypass " +
+           "-File `"$HelperScriptPath`" " +
+           "-JoinUrl `"$escapedUrl`" " +
+           "-ResultFile `"$ResultFile`""
+
+Write-Log "Command: $cmdLine"
 
 # ---------------------------------------------------------------------------
-# 4. Remove stale result file if present
+# 4. Remove stale result file
 # ---------------------------------------------------------------------------
 if (Test-Path $ResultFile) {
     Remove-Item $ResultFile -Force
-    Write-Log "Removed stale result file: $ResultFile"
+    Write-Log "Removed stale result file."
 }
 
 # ---------------------------------------------------------------------------
@@ -422,24 +380,24 @@ if (Test-Path $ResultFile) {
         Write-Log "Failed to parse result file: $_" "WARN"
     }
 } else {
-    Write-Log "Result file not found after helper exit — call may have failed." "WARN"
+    Write-Log "Result file not found after helper exit — call may have failed silently." "WARN"
 }
 
-$callStatus  = if ($testResult) { $testResult.Status  } else { "UNKNOWN" }
-$callMessage = if ($testResult) { $testResult.Message } else { "No result file produced." }
-$callDuration= if ($testResult -and $testResult.ConnectedSeconds) { "$($testResult.ConnectedSeconds)s" } else { "N/A" }
+$callStatus   = if ($testResult) { $testResult.Status  } else { "UNKNOWN" }
+$callMessage  = if ($testResult) { $testResult.Message } else { "No result file produced." }
+$callDuration = if ($testResult -and $testResult.ConnectedSeconds) { "$($testResult.ConnectedSeconds)s" } else { "N/A" }
 
 # ---------------------------------------------------------------------------
-# 7. Send email report (if configured)
+# 7. Send email report (if SMTP is configured)
 # ---------------------------------------------------------------------------
 if ($SmtpServer -and $SmtpUser -and $SmtpPassword -and $MailFrom -and $MailTo) {
 
     Write-Log "Sending email report..."
 
     $statusColour = switch ($callStatus) {
-        "PASS"    { "#2ecc71" }
-        "FAIL"    { "#e74c3c" }
-        default   { "#f39c12" }
+        "PASS"  { "#2ecc71" }
+        "FAIL"  { "#e74c3c" }
+        default { "#f39c12" }
     }
 
     $htmlBody = @"
@@ -450,10 +408,8 @@ if ($SmtpServer -and $SmtpUser -and $SmtpPassword -and $MailFrom -and $MailTo) {
       <td style="padding:6px 12px">$RoomName</td></tr>
   <tr><td style="padding:6px 12px;font-weight:bold;background:#f5f5f5">Date / Time</td>
       <td style="padding:6px 12px">$(Get-Date -f 'yyyy-MM-dd HH:mm:ss')</td></tr>
-  <tr><td style="padding:6px 12px;font-weight:bold;background:#f5f5f5">Meeting Subject</td>
-      <td style="padding:6px 12px">$($meetingInfo.Subject)</td></tr>
   <tr><td style="padding:6px 12px;font-weight:bold;background:#f5f5f5">Join URL</td>
-      <td style="padding:6px 12px;word-break:break-all"><a href="$joinUrl">$joinUrl</a></td></tr>
+      <td style="padding:6px 12px;word-break:break-all"><a href="$JoinUrl">$JoinUrl</a></td></tr>
   <tr><td style="padding:6px 12px;font-weight:bold;background:#f5f5f5">Call Status</td>
       <td style="padding:6px 12px"><span style="background:$statusColour;color:#fff;padding:2px 10px;border-radius:4px;font-weight:bold">$callStatus</span></td></tr>
   <tr><td style="padding:6px 12px;font-weight:bold;background:#f5f5f5">Connected Duration</td>
@@ -465,20 +421,18 @@ if ($SmtpServer -and $SmtpUser -and $SmtpPassword -and $MailFrom -and $MailTo) {
 </body></html>
 "@
 
-    $smtpCred = New-Object System.Net.NetworkCredential($SmtpUser, $SmtpPassword)
-    $smtp     = New-Object System.Net.Mail.SmtpClient($SmtpServer, $SmtpPort)
-    $smtp.EnableSsl             = $true
-    $smtp.Credentials           = $smtpCred
-    $smtp.DeliveryMethod        = [System.Net.Mail.SmtpDeliveryMethod]::Network
+    $smtpCred             = New-Object System.Net.NetworkCredential($SmtpUser, $SmtpPassword)
+    $smtp                 = New-Object System.Net.Mail.SmtpClient($SmtpServer, $SmtpPort)
+    $smtp.EnableSsl       = $true
+    $smtp.Credentials     = $smtpCred
+    $smtp.DeliveryMethod  = [System.Net.Mail.SmtpDeliveryMethod]::Network
 
-    $mail         = New-Object System.Net.Mail.MailMessage
-    $mail.From    = $MailFrom
-    $mail.Subject = "MTR Test Call [$callStatus] — $RoomName — $(Get-Date -f 'yyyy-MM-dd')"
-    $mail.Body    = $htmlBody
+    $mail            = New-Object System.Net.Mail.MailMessage
+    $mail.From       = $MailFrom
+    $mail.Subject    = "MTR Test Call [$callStatus] — $RoomName — $(Get-Date -f 'yyyy-MM-dd')"
+    $mail.Body       = $htmlBody
     $mail.IsBodyHtml = $true
-    foreach ($addr in ($MailTo -split ',')) {
-        $mail.To.Add($addr.Trim())
-    }
+    foreach ($addr in ($MailTo -split ',')) { $mail.To.Add($addr.Trim()) }
 
     try {
         $smtp.Send($mail)
@@ -489,6 +443,7 @@ if ($SmtpServer -and $SmtpUser -and $SmtpPassword -and $MailFrom -and $MailTo) {
         $smtp.Dispose()
         $mail.Dispose()
     }
+
 } else {
     Write-Log "SMTP not configured — skipping email."
 }
