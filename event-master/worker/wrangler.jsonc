@@ -1,0 +1,22 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "event-master",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-01",
+  // Serves the Expo web build (run `npm run build:web` in event-master first).
+  // /api/* goes to the Worker; everything else is a static file or index.html.
+  "assets": {
+    "directory": "../dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "vars": {
+    // Extra web origins allowed to call /api (comma separated). The web app
+    // served by this Worker and the native apps don't need to be listed.
+    "ALLOWED_ORIGINS": "http://localhost:8081"
+  },
+  // Per-IP limit on AI calls so the API key can't be run up by one client.
+  "ratelimits": [{ "name": "AI_LIMITER", "namespace_id": "1001", "simple": { "limit": 20, "period": 60 } }]
+  // Secret (set with `npx wrangler secret put ANTHROPIC_API_KEY`): ANTHROPIC_API_KEY
+}

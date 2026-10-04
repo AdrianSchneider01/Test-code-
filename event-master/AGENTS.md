@@ -33,6 +33,8 @@ Run lint and tests before declaring any task done.
 - `src/logic/` — pure, unit-tested logic (recommendation engine, memory, events). Keep UI out of it.
 - `src/data/` — categories, the SAMPLE product catalogue and Explore ideas.
 - `src/state/` — app state (persisted with AsyncStorage) and navigation.
+- `src/ai/` — AI contract (task schemas + sanitisers, shared with the Worker) and the client. Every AI feature must have a non-AI fallback, and AI output must be sanitised to the app's vocabulary, never trusted for product facts.
+- `worker/` — Cloudflare Worker (serves `dist/` and `/api/ai/*`, calls Claude with the `ANTHROPIC_API_KEY` secret). Tests: `npm run test:worker`.
 - `src/components/`, `src/screens/` — UI.
 - This is a JavaScript project (no TypeScript), so there is no typecheck step. Run `npm test` and `npm run lint`.
 

@@ -14,7 +14,8 @@ npm run web        # or open it in a browser
 Other commands:
 
 ```bash
-npm test           # unit tests for the recommendation engine and memory
+npm test           # unit tests for the recommendation engine, memory and AI contract
+npm run test:worker
 npm run lint
 ```
 
@@ -57,16 +58,51 @@ npm run lint
 - **Tablet:** two-column layouts.
 - **Desktop:** sidebar navigation, with the suggestion and the Party Plan side by side.
 
-## Not built yet
+## ✨ AI features (Claude)
 
-These need information or services that don't exist yet, so they were left out on purpose:
+AI is optional. Without it, the app falls back to built-in rules. With it, the server sends structured requests to Claude (`claude-opus-5-5`). Every answer is checked against the app's own lists of colours, styles, vibes, shops and categories, so **AI can steer suggestions but can never invent products, prices or links**.
+
+| Where | What AI does |
+|---|---|
+| Decline → "Something else" | Understands free-text feedback (for example "feels a bit much for little ones") and adapts the next suggestion |
+| Suggestion → ✨ Ask Event Master | Requests like "something more elegant" or "no pink" steer the rest of the plan. Each shows as a chip you can tap to remove |
+| Suggestion → ✨ Explain this pick | A friendlier explanation, written only from facts the app supplies |
+| Create/edit an event | Event types and vibes in your own words ("70s disco") are matched to known vibes, colours and styles |
+| Party Plan → ✨ Ideas for this party | Themes, activities and touches (ideas only, never products) that you can save |
+| Profile → ✨ Tell me about your style | Turns a description into suggested memories. **You confirm each one** before it's saved |
+| Profile → ✨ Summarise my style | A short summary of what's been learned |
+| Event page → What I learned | Includes what AI understood from your feedback and requests |
+
+**Privacy:** what you type, plus basic event details (type, vibe, guests, budget, categories), is sent. **Event names and venues are never sent.** You can switch AI off under Profile → "Use AI features".
+
+**Memory still follows the spec:** AI never turns a single choice into a permanent preference. The rule of "repeats across 2+ saved events" still decides learned memories, and AI-suggested memories are added only after you confirm them.
+
+## Deploying to Cloudflare Workers
+
+The `worker/` folder holds one Cloudflare Worker that serves both the web app and the AI API. **The Anthropic API key lives only there**, as a secret.
+
+```bash
+cd event-master
+npm run build:web                            # builds the web app into dist/
+cd worker
+npm install
+npx wrangler login                           # once
+npx wrangler secret put ANTHROPIC_API_KEY    # paste your Anthropic API key
+npx wrangler deploy
+```
+
+- **Web:** open the `*.workers.dev` URL that `wrangler deploy` prints. The app finds the API on the same address automatically.
+- **Phone apps:** set `EXPO_PUBLIC_API_URL=https://<your-worker>.workers.dev` before `npm start` or an EAS build, so the app knows where the API is.
+- **Protection:** AI calls are limited to 20 per minute per IP address. Other websites can't call the API unless they're listed in `ALLOWED_ORIGINS` in `worker/wrangler.jsonc`. Request sizes are capped, and every input and output is validated.
+- **Tests:** `npm run test:worker` checks the Worker using a fake Claude client, so no API key is needed.
+
+## Not built yet
 
 | Spec item | Why it's not built | What's needed |
 |---|---|---|
 | Phase 4: real products, images, prices and links | The spec says product facts must come from reliable structured sources, so none were invented | Which shops or product feeds to use |
 | Phase 5: venue search | Needs a venue or availability service. "Find a venue" currently asks for the area you're looking in | Which venue service to use |
 | Supabase (accounts, cloud sync, security rules) | Needs a Supabase project. Data currently stays on the device | A Supabase project URL and key |
-| AI layer (understanding free text) | Needs an AI provider and API key, called from a server function | Provider choice and a server function |
 | Date and venue change warnings | The current sample data doesn't depend on date or venue | Real venue and product availability |
 
 ## How it's organised
@@ -80,6 +116,9 @@ src/data/catalog.js        SAMPLE product catalogue (fictional shops, no links)
 src/data/categories.js     categories, the parts of each category, vibes, event types
 src/state/AppState.js      app state, saved on the device with AsyncStorage
 src/state/Navigation.js    small stack navigator (supports Android back)
+src/ai/contract.js         AI tasks: JSON schemas + output checks (shared with the Worker)
+src/ai/client.js           calls the Worker, with a non-AI fallback for every feature
+worker/                    Cloudflare Worker: serves the web build, /api/ai/* calls Claude
 src/components/            brand (logo/wordmark), UI kit, plan components
 src/screens/               all screens
 ```

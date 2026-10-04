@@ -1,5 +1,5 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { COLOUR_SWATCH, capitalise, eventTypeOf, getCategory, getSlot, vibeLabel } from '../data/categories';
 import { getProduct } from '../data/catalog';
@@ -74,7 +74,7 @@ export function BudgetBar({ event, compact }) {
 }
 
 // The big one-at-a-time suggestion card.
-export function SuggestionCard({ suggestion, onSave, saved }) {
+export function SuggestionCard({ suggestion, onSave, saved, onExplain, explaining, explanation }) {
   const p = suggestion.product;
   const slot = getSlot(p.category, p.slot);
   return (
@@ -116,6 +116,22 @@ export function SuggestionCard({ suggestion, onSave, saved }) {
             • {r}
           </T>
         ))}
+        {explanation ? (
+          <T variant="small" style={{ marginTop: 10 }}>
+            ✨ {explanation}
+          </T>
+        ) : onExplain ? (
+          explaining ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10, minHeight: 44 }}>
+              <ActivityIndicator color={colors.purple} size="small" />
+              <T variant="small" muted>
+                Explaining…
+              </T>
+            </View>
+          ) : (
+            <Button variant="tertiary" size="sm" title="Explain this pick" icon="✨" onPress={onExplain} style={{ alignSelf: 'flex-start', paddingHorizontal: 0, marginTop: 4 }} />
+          )
+        ) : null}
       </View>
       {onSave ? (
         <Button variant="tertiary" title={saved ? 'Saved to ideas' : 'Save idea'} icon={saved ? '💜' : '♡'} onPress={onSave} style={{ marginTop: 6 }} />

@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
+import { checkAI } from '../ai/client';
 import { DEFAULT_MEMORY, effectiveMemories, profileFromMemories } from '../logic/memory';
 import { uid } from '../logic/util';
 
@@ -10,13 +11,23 @@ const STORAGE_KEY = 'eventmaster:v1';
 
 const AppStateContext = createContext(null);
 
-const EMPTY = { events: [], memory: DEFAULT_MEMORY, savedIdeas: [] };
+const DEFAULT_SETTINGS = { ai: true };
+const EMPTY = { events: [], memory: DEFAULT_MEMORY, savedIdeas: [], settings: DEFAULT_SETTINGS };
 
 export function AppStateProvider({ children }) {
   const [data, setData] = useState(EMPTY);
   const [draft, setDraftState] = useState(null);
   const [hydrated, setHydrated] = useState(false);
+  const [aiAvailable, setAiAvailable] = useState(false);
   const saveTimer = useRef(null);
+
+  useEffect(() => {
+    let alive = true;
+    checkAI().then((ok) => alive && setAiAvailable(ok));
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -28,6 +39,7 @@ export function AppStateProvider({ children }) {
           events: Array.isArray(parsed.events) ? parsed.events : [],
           memory: { ...DEFAULT_MEMORY, ...(parsed.memory || {}) },
           savedIdeas: Array.isArray(parsed.savedIdeas) ? parsed.savedIdeas : [],
+          settings: { ...DEFAULT_SETTINGS, ...(parsed.settings || {}) },
         });
       })
       .catch(() => {})
@@ -65,21 +77,22 @@ export function AppStateProvider({ children }) {
           events: s.events.map((e) => (e.id === id ? { ...e, status: 'saved', savedAt: new Date().toISOString() } : e)),
         })),
       setMemory: (fn) => setData((s) => ({ ...s, memory: fn(s.memory) })),
-      toggleSavedIdea: (kind, refId) =>
+      // kind: 'product' | 'idea' | 'ai' (AI ideas carry their content in `data`)
+      toggleSavedIdea: (kind, refId, data) =>
         setData((s) => {
           const exists = s.savedIdeas.some((x) => x.kind === kind && x.refId === refId);
+          const entry = { id: uid('idea'), kind, refId, savedAt: new Date().toISOString(), ...(data ? { data } : {}) };
           return {
             ...s,
-            savedIdeas: exists
-              ? s.savedIdeas.filter((x) => !(x.kind === kind && x.refId === refId))
-              : [...s.savedIdeas, { id: uid('idea'), kind, refId, savedAt: new Date().toISOString() }],
+            savedIdeas: exists ? s.savedIdeas.filter((x) => !(x.kind === kind && x.refId === refId)) : [...s.savedIdeas, entry],
           };
         }),
+      setSettings: (patch) => setData((s) => ({ ...s, settings: { ...s.settings, ...patch } })),
     }),
     [setDraft],
   );
 
-  const value = useMemo(() => ({ ...data, draft, hydrated, ...actions }), [data, draft, hydrated, actions]);
+  const value = useMemo(() => ({ ...data, draft, hydrated, aiAvailable, ...actions }), [data, draft, hydrated, aiAvailable, actions]);
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;
 }
 
@@ -116,4 +129,11 @@ export function useRecommendationContext(event) {
 export function useIsSaved(kind, refId) {
   const { savedIdeas } = useAppState();
   return savedIdeas.some((x) => x.kind === kind && x.refId === refId);
+}
+
+// AI features run only when the server has AI configured AND the user has
+// "Use AI features" switched on.
+export function useAI() {
+  const { aiAvailable, settings } = useAppState();
+  return { available: aiAvailable, enabled: aiAvailable && settings.ai };
 }

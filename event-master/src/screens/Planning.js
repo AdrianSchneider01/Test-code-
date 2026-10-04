@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
+
+import { askAI, eventInfo, productFacts } from '../ai/client';
 
 import { Confetti, FadeIn } from '../components/Effects';
 import {
@@ -15,7 +17,7 @@ import {
   venueText,
 } from '../components/Plan';
 import { Screen } from '../components/Screen';
-import { Button, Card, Field, Gap, Grid, OptionRow, SectionTitle, Sheet, StatusPill, Stepper, T, Tag, nativeDriver, useToast } from '../components/ui';
+import { Button, Card, Chip, Field, Gap, Grid, OptionRow, SectionTitle, Sheet, StatusPill, Stepper, T, Tag, nativeDriver, useToast } from '../components/ui';
 import { capitalise, getCategory, getSlot } from '../data/categories';
 import { getProduct } from '../data/catalog';
 import {
@@ -25,6 +27,7 @@ import {
   applyDecline,
   applyOwnItem,
   applyQty,
+  applyRefinement,
   applyRemove,
   applyReplace,
   applySkip,
@@ -34,10 +37,11 @@ import {
   itemTotal,
   nextCategoryId,
   nextOpenSlot,
+  removeRefinement,
   suggestNext,
 } from '../logic/engine';
 import { formatDate, money } from '../logic/util';
-import { useAppState, useEvent, useIsSaved, useRecommendationContext } from '../state/AppState';
+import { useAI, useAppState, useEvent, useIsSaved, useRecommendationContext } from '../state/AppState';
 import { useNav } from '../state/Navigation';
 import { colors, fonts, useLayout } from '../theme';
 
@@ -105,7 +109,75 @@ export function PartyPlanScreen() {
           <CategoryCard key={c} event={event} categoryId={c} onItem={openItem} onStart={() => nav.navigate('suggest', { eventId: event.id, categoryId: c })} />
         ))}
       </Grid>
+      <AIIdeas event={event} />
     </Screen>
+  );
+}
+
+// AI-generated party ideas (themes, activities, touches — never products).
+function AIIdeas({ event }) {
+  const ai = useAI();
+  const { updateEvent, toggleSavedIdea, savedIdeas } = useAppState();
+  const toast = useToast();
+  const { columns } = useLayout();
+  const [loading, setLoading] = useState(false);
+  if (!ai.enabled) return null;
+  const ideas = event.aiIdeas || [];
+
+  const generate = async () => {
+    setLoading(true);
+    const res = await askAI('ideas', { event: eventInfo(event) });
+    setLoading(false);
+    if (res && res.ideas.length) updateEvent(event.id, (e) => ({ ...e, aiIdeas: res.ideas.map((i, n) => ({ ...i, id: `${e.id}-idea-${Date.now()}-${n}` })) }));
+    else toast('I couldn’t reach Event Master’s AI — please try again');
+  };
+
+  return (
+    <View style={{ marginTop: 24 }}>
+      <SectionTitle right={ideas.length && !loading ? <Button variant="tertiary" size="sm" title="New ideas" icon="✨" onPress={generate} /> : null}>
+        ✨ Ideas for this party
+      </SectionTitle>
+      {loading ? (
+        <Card>
+          <Thinking label="Dreaming up ideas…" />
+        </Card>
+      ) : ideas.length ? (
+        <Grid columns={columns}>
+          {ideas.map((idea) => {
+            const saved = savedIdeas.some((x) => x.kind === 'ai' && x.refId === idea.id);
+            return (
+              <Card key={idea.id} style={{ flexGrow: 1 }}>
+                <View style={styles.rowBetween}>
+                  <Text style={{ fontSize: 26 }}>{idea.emoji}</Text>
+                  <Button
+                    variant="tertiary"
+                    size="sm"
+                    title={saved ? 'Saved' : 'Save'}
+                    icon={saved ? '💜' : '♡'}
+                    onPress={() => toggleSavedIdea('ai', idea.id, { emoji: idea.emoji, title: idea.title, text: idea.text, category: idea.category })}
+                  />
+                </View>
+                <T variant="h3" style={{ marginTop: 6 }}>
+                  {idea.title}
+                </T>
+                <T variant="small" muted style={{ marginTop: 4 }}>
+                  {idea.text}
+                </T>
+                <T variant="tiny" dim style={{ marginTop: 8 }}>
+                  {getCategory(idea.category).emoji} {getCategory(idea.category).name}
+                </T>
+              </Card>
+            );
+          })}
+        </Grid>
+      ) : (
+        <Card>
+          <T muted>Want some inspiration? I can suggest themes, activities and special touches that suit this party.</T>
+          <Gap h={14} />
+          <Button title="Get ideas" icon="✨" size="md" variant="secondary" onPress={generate} style={{ alignSelf: 'flex-start' }} />
+        </Card>
+      )}
+    </View>
   );
 }
 
@@ -150,6 +222,13 @@ export function SuggestScreen() {
   const [asking, setAsking] = useState(false);
   const [otherMode, setOtherMode] = useState(false);
   const [otherText, setOtherText] = useState('');
+  const ai = useAI();
+  // AI work in progress: 'feedback' | 'refine' | null
+  const [thinking, setThinking] = useState(null);
+  const [askOpen, setAskOpen] = useState(false);
+  const [askText, setAskText] = useState('');
+  const [explained, setExplained] = useState({});
+  const [explaining, setExplaining] = useState(null);
   const [preferred] = useState(params.categoryId || null);
   // Holds the suggestion that is animating out; buttons are disabled until a new one shows.
   const [leavingKey, setLeavingKey] = useState(null);
@@ -219,15 +298,50 @@ export function SuggestScreen() {
     });
   };
 
-  const decline = (reason, note = '') => {
+  const decline = async (reason, note = '') => {
+    // "Something else": let AI understand the note (falls back to keywords).
+    let aiResult = null;
+    if (reason === 'other' && ai.enabled) {
+      setThinking('feedback');
+      aiResult = await askAI('feedback', { note: note.trim(), product: productFacts(suggestion) });
+      setThinking(null);
+    }
     setAsking(false);
     setOtherMode(false);
     setOtherText('');
-    const learned = reason !== 'dislike' && (reason !== 'other' || interpretNote(note).length > 0);
+    const learned = aiResult ? aiResult.reasons.length > 0 || aiResult.avoidColours.length > 0 : reason !== 'dislike' && (reason !== 'other' || interpretNote(note).length > 0);
     animateOut(-1, () => {
-      updateEvent(event.id, (e) => applyDecline(e, suggestion, reason, note));
-      toast(learned ? '✦ Preference updated' : 'Got it — I won’t suggest that again');
+      updateEvent(event.id, (e) => applyDecline(e, suggestion, reason, note, aiResult));
+      if (aiResult && aiResult.summary) toast(`✨ Got it — ${aiResult.summary}`);
+      else toast(learned ? '✦ Preference updated' : 'Got it — I won’t suggest that again');
     });
+  };
+
+  // "Ask Event Master": a request in the user's own words that steers the plan.
+  const askEventMaster = async (text) => {
+    const t = text.trim();
+    if (!t) return;
+    setThinking('refine');
+    const res = await askAI('refine', { text: t, event: eventInfo(event), product: suggestion ? productFacts(suggestion) : undefined });
+    setThinking(null);
+    if (!res) {
+      toast('I couldn’t reach Event Master’s AI — please try again');
+      return;
+    }
+    setAskOpen(false);
+    setAskText('');
+    updateEvent(event.id, (e) => applyRefinement(e, t, res));
+    toast(`✨ ${res.summary || 'Got it'}`);
+  };
+
+  const explain = async () => {
+    if (!suggestion) return;
+    const key = suggestion.product.id;
+    setExplaining(key);
+    const res = await askAI('explain', { product: productFacts(suggestion), reasons: suggestion.reasons, event: eventInfo(event) });
+    setExplaining(null);
+    if (res && res.explanation) setExplained((m) => ({ ...m, [key]: res.explanation }));
+    else toast('I couldn’t reach Event Master’s AI — please try again');
   };
 
   const skip = () => {
@@ -266,6 +380,21 @@ export function SuggestScreen() {
           </T>
         </View>
       ) : null}
+      {(event.refinements || []).length ? (
+        <View style={styles.refineRow}>
+          {event.refinements.map((r) => (
+            <Pressable
+              key={r.id}
+              onPress={() => updateEvent(event.id, (e) => removeRefinement(e, r.id))}
+              accessibilityRole="button"
+              accessibilityLabel={`Remove request: ${r.summary || r.text}`}
+              style={styles.refineChip}
+            >
+              <T variant="tiny">💬 {r.summary || r.text}  ✕</T>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
       {result && result.relaxed ? (
         <View style={[styles.banner, { borderColor: 'rgba(251,191,36,0.3)', backgroundColor: 'rgba(251,191,36,0.08)' }]}>
           <T variant="small" color={colors.warning}>
@@ -277,7 +406,14 @@ export function SuggestScreen() {
         <>
           <Animated.View style={cardStyle}>
             <FadeIn key={suggestion.product.id}>
-              <SuggestionCard suggestion={suggestion} saved={savedIdea} onSave={() => toggleSavedIdea('product', suggestion.product.id)} />
+              <SuggestionCard
+                suggestion={suggestion}
+                saved={savedIdea}
+                onSave={() => toggleSavedIdea('product', suggestion.product.id)}
+                onExplain={ai.enabled ? explain : null}
+                explaining={explaining === suggestion.product.id}
+                explanation={explained[suggestion.product.id]}
+              />
             </FadeIn>
             <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.acceptGlow, { opacity: acceptGlow }]} />
           </Animated.View>
@@ -292,6 +428,7 @@ export function SuggestScreen() {
         </Card>
       )}
       <View style={styles.tertiaryRow}>
+        {ai.enabled ? <Button variant="tertiary" title="Ask Event Master" icon="✨" onPress={() => setAskOpen(true)} /> : null}
         <Button variant="tertiary" title="I already have one" icon="✏️" onPress={ownItem} />
         {replaceItem ? (
           <Button variant="tertiary" title="Keep current item" onPress={nav.back} />
@@ -347,8 +484,17 @@ export function SuggestScreen() {
         {otherMode ? (
           <View>
             <Field label="Tell me more" value={otherText} onChangeText={setOtherText} placeholder="e.g. a bit too bright" autoFocus multiline />
+            {ai.enabled ? (
+              <T variant="tiny" dim style={{ marginTop: 8 }}>
+                ✨ I’ll use AI to understand what you mean.
+              </T>
+            ) : null}
             <Gap h={14} />
-            <Button title="Decline" onPress={() => decline('other', otherText)} disabled={!otherText.trim()} full />
+            {thinking === 'feedback' ? (
+              <Thinking label="Understanding your feedback…" />
+            ) : (
+              <Button title="Decline" onPress={() => decline('other', otherText)} disabled={!otherText.trim()} full />
+            )}
             <Gap h={8} />
             <Button variant="tertiary" title="Back to reasons" onPress={() => setOtherMode(false)} />
           </View>
@@ -358,7 +504,36 @@ export function SuggestScreen() {
           ))
         )}
       </Sheet>
+
+      <Sheet
+        visible={askOpen}
+        onClose={() => setAskOpen(false)}
+        title="✨ Ask Event Master"
+        subtitle="Tell me what you’d like and I’ll adjust the rest of your suggestions."
+      >
+        <Field value={askText} onChangeText={setAskText} placeholder="e.g. something more elegant" autoFocus multiline accessibilityLabel="Your request" />
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
+          {['Something more elegant', 'Cheaper options please', 'More colourful', 'No pink'].map((ex) => (
+            <Chip key={ex} small label={ex} onPress={() => setAskText(ex)} />
+          ))}
+        </View>
+        <Gap h={16} />
+        {thinking === 'refine' ? (
+          <Thinking label="Thinking about your request…" />
+        ) : (
+          <Button title="Ask" icon="✨" onPress={() => askEventMaster(askText)} disabled={!askText.trim()} full />
+        )}
+      </Sheet>
     </Screen>
+  );
+}
+
+export function Thinking({ label }) {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', minHeight: 56, gap: 10 }} accessibilityLiveRegion="polite">
+      <ActivityIndicator color={colors.pink} />
+      <T muted>{label}</T>
+    </View>
   );
 }
 
@@ -642,5 +817,7 @@ const styles = StyleSheet.create({
   actions: { flexDirection: 'row', gap: 12, marginTop: 16 },
   tertiaryRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8, marginTop: 10 },
   banner: { padding: 12, borderRadius: 14, borderWidth: 1, borderColor: colors.borderStrong, backgroundColor: colors.purpleSoft, marginBottom: 14 },
+  refineRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
+  refineChip: { minHeight: 32, justifyContent: 'center', paddingHorizontal: 12, borderRadius: 999, backgroundColor: colors.purpleSoft, borderWidth: 1, borderColor: colors.borderStrong },
   acceptGlow: { borderRadius: 22, borderWidth: 2, borderColor: colors.pink, boxShadow: '0 0 40px rgba(255,46,147,0.55), inset 0 0 30px rgba(139,92,246,0.4)' },
 });

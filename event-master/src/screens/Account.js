@@ -13,6 +13,7 @@ import { getIdea } from '../data/ideas';
 import {
   analyseChanges,
   applyEdit,
+  applyVibeHints,
   applyQty,
   budgetSummary,
   categoryTotal,
@@ -34,10 +35,11 @@ import {
   optionLabel,
 } from '../logic/memory';
 import { formatDate, money, pluralise } from '../logic/util';
-import { useAppState, useEvent, useMemories } from '../state/AppState';
+import { askAI, ownWordsText } from '../ai/client';
+import { useAI, useAppState, useEvent, useMemories } from '../state/AppState';
 import { useNav } from '../state/Navigation';
 import { colors, useLayout } from '../theme';
-import { MissingEvent } from './Planning';
+import { MissingEvent, Thinking } from './Planning';
 
 // ── Shared ──────────────────────────────────────────────────────────────────
 function openEvent(nav, event) {
@@ -169,6 +171,7 @@ function savedTitle(s) {
     const p = getProduct(s.refId);
     return p ? `${p.emoji} ${p.name}` : 'Removed product';
   }
+  if (s.kind === 'ai') return s.data ? `${s.data.emoji} ${s.data.title}` : 'Saved idea';
   const idea = getIdea(s.refId);
   return idea ? `${idea.emoji} ${idea.title}` : 'Removed idea';
 }
@@ -344,6 +347,7 @@ export function EditEventScreen() {
   const nav = useNav();
   const event = useEvent(nav.route.params.eventId);
   const { updateEvent } = useAppState();
+  const ai = useAI();
   const toast = useToast();
   const [form, setForm] = useState(() =>
     event
@@ -390,6 +394,13 @@ export function EditEventScreen() {
     const after = applyEdit(event, patch);
     const changes = analyseChanges(event, after);
     updateEvent(event.id, (e) => applyEdit(e, patch));
+    // Re-read the user's own words if they changed (or drop stale hints).
+    const before = ownWordsText(event);
+    const words = ownWordsText(after);
+    if (words !== before) {
+      if (!words) updateEvent(event.id, (e) => applyVibeHints(e, null));
+      else if (ai.enabled) askAI('vibe', { text: words }).then((hints) => hints && updateEvent(event.id, (e) => applyVibeHints(e, hints)));
+    }
     if (changesNeedReview(changes)) setPending(changes);
     else {
       toast('✓ Event updated');
@@ -610,8 +621,91 @@ function MemoryRow({ mem, onChange }) {
   );
 }
 
+// AI: "Tell me about your style" → suggested memories the user confirms.
+function TellMeAboutYou() {
+  const { setMemory } = useAppState();
+  const toast = useToast();
+  const [text, setText] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [found, setFound] = useState(null);
+  const [picked, setPicked] = useState([]);
+
+  const run = async () => {
+    setLoading(true);
+    const res = await askAI('memories', { text: text.trim() });
+    setLoading(false);
+    if (!res) return toast('I couldn’t reach Event Master’s AI — please try again');
+    if (!res.memories.length) return toast('I couldn’t spot any preferences in that — try adding colours, styles or shops');
+    setFound(res.memories);
+    setPicked(res.memories.map((_, i) => i));
+  };
+
+  const add = () => {
+    setMemory((m) => found.filter((_, i) => picked.includes(i)).reduce((acc, f) => addManualMemory(acc, f.type, f.value), m));
+    toast(`✦ Added ${pluralise(picked.length, 'preference')}`);
+    setFound(null);
+    setText('');
+  };
+
+  return (
+    <Card style={{ marginBottom: 20 }}>
+      <T variant="h3">✨ Tell me about your style</T>
+      <T variant="small" muted style={{ marginTop: 4, marginBottom: 12 }}>
+        Describe what you like in your own words. I’ll suggest preferences to remember — you choose which to keep.
+      </T>
+      <Field value={text} onChangeText={setText} multiline placeholder="e.g. I love gold and white, keep things elegant, and we usually do cupcakes" accessibilityLabel="Describe your style" />
+      <Gap h={12} />
+      {loading ? (
+        <Thinking label="Reading your preferences…" />
+      ) : (
+        <Button title="Suggest preferences" icon="✨" size="md" variant="secondary" onPress={run} disabled={!text.trim()} style={{ alignSelf: 'flex-start' }} />
+      )}
+      <Sheet visible={!!found} onClose={() => setFound(null)} title="Keep these preferences?" subtitle="Untick anything you don’t want me to remember.">
+        {(found || []).map((f, i) => (
+          <OptionRow
+            key={`${f.type}:${f.value}`}
+            emoji={picked.includes(i) ? '☑️' : '⬜'}
+            label={optionLabel(f.type, f.value)}
+            sub={memoryType(f.type).label}
+            selected={picked.includes(i)}
+            onPress={() => setPicked((p) => (p.includes(i) ? p.filter((x) => x !== i) : [...p, i]))}
+          />
+        ))}
+        <Gap h={6} />
+        <Button title={`Add ${pluralise(picked.length, 'preference')}`} onPress={add} disabled={!picked.length} full />
+        <Gap h={8} />
+        <Button variant="tertiary" title="Cancel" onPress={() => setFound(null)} />
+      </Sheet>
+    </Card>
+  );
+}
+
+// AI: a friendly two-sentence summary of what's been learned.
+function ProfileSummary({ memories }) {
+  const toast = useToast();
+  const [summary, setSummary] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const run = async () => {
+    setLoading(true);
+    const res = await askAI('profileSummary', { memories: memories.slice(0, 40).map((m) => m.text) });
+    setLoading(false);
+    if (res && res.summary) setSummary(res.summary);
+    else toast('I couldn’t reach Event Master’s AI — please try again');
+  };
+  if (loading) return <Thinking label="Summarising your style…" />;
+  if (summary) {
+    return (
+      <View style={styles.summary}>
+        <T>✨ {summary}</T>
+      </View>
+    );
+  }
+  return <Button variant="tertiary" size="sm" title="Summarise my style" icon="✨" onPress={run} style={{ alignSelf: 'flex-start', paddingHorizontal: 0 }} />;
+}
+
 export function ProfileScreen() {
-  const { memory, setMemory } = useAppState();
+  const { memory, setMemory, settings, setSettings } = useAppState();
+  const ai = useAI();
   const memories = useMemories();
   const toast = useToast();
   const { columns } = useLayout();
@@ -645,6 +739,29 @@ export function ProfileScreen() {
           />
         </View>
       </Card>
+
+      <Card style={{ marginBottom: 20 }}>
+        <View style={styles.row}>
+          <View style={{ flex: 1 }}>
+            <T variant="bodyBold">✨ Use AI features</T>
+            <T variant="small" muted>
+              {ai.available
+                ? 'Helps me understand your words: feedback, requests, vibes and style descriptions. What you type and basic event details (type, vibe, guests, budget — never names or venues) are sent to Event Master’s server and Anthropic’s Claude.'
+                : 'AI isn’t connected for this app yet, so I’m using built-in rules.'}
+            </T>
+          </View>
+          <Switch
+            value={ai.available && settings.ai}
+            disabled={!ai.available}
+            onValueChange={(on) => setSettings({ ai: on })}
+            trackColor={{ false: colors.navyLight, true: colors.purple }}
+            thumbColor={ai.available && settings.ai ? colors.pink : colors.textMuted}
+            accessibilityLabel="Use AI features"
+          />
+        </View>
+      </Card>
+
+      {ai.enabled ? <TellMeAboutYou /> : null}
 
       <Grid columns={Math.min(columns, 3)}>
         {MEMORY_SECTIONS.map((s) => {
@@ -687,6 +804,11 @@ export function ProfileScreen() {
       <Gap h={22} />
       <SectionTitle>🧠 What I’ve learned</SectionTitle>
       <Card>
+        {ai.enabled && memories.length ? (
+          <View style={{ marginBottom: 8 }}>
+            <ProfileSummary key={memories.map((m) => m.key).join('|')} memories={memories} />
+          </View>
+        ) : null}
         {memories.length ? (
           memories.map((m) => <MemoryRow key={m.key} mem={m} onChange={(mem) => setEditor({ section: memoryType(mem.type).section, type: mem.type, mem })} />)
         ) : (
@@ -746,7 +868,7 @@ export function SavedIdeasScreen() {
         <Grid columns={columns}>
           {savedIdeas.map((s) => {
             const product = s.kind === 'product' ? getProduct(s.refId) : null;
-            const idea = s.kind === 'idea' ? getIdea(s.refId) : null;
+            const idea = s.kind === 'idea' ? getIdea(s.refId) : s.kind === 'ai' ? s.data : null;
             return (
               <Card key={s.id} style={{ flexGrow: 1 }}>
                 <View style={styles.row}>
@@ -758,6 +880,11 @@ export function SavedIdeasScreen() {
                     <T variant="small" muted numberOfLines={2}>
                       {product ? `${getCategory(product.category).name} · ${money(product.price)} · ${product.retailer}` : idea ? idea.text : ''}
                     </T>
+                    {s.kind === 'ai' ? (
+                      <T variant="tiny" dim>
+                        ✨ AI idea
+                      </T>
+                    ) : null}
                   </View>
                   <Button variant="tertiary" size="sm" title="Remove" onPress={() => toggleSavedIdea(s.kind, s.refId)} />
                 </View>
@@ -772,5 +899,6 @@ export function SavedIdeasScreen() {
 
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center' },
+  summary: { padding: 14, borderRadius: 14, backgroundColor: colors.purpleSoft, borderWidth: 1, borderColor: 'rgba(139,92,246,0.3)', marginBottom: 6 },
   warn: { marginTop: 14, padding: 12, borderRadius: 14, borderWidth: 1, borderColor: 'rgba(248,113,113,0.35)', backgroundColor: 'rgba(248,113,113,0.08)' },
 });

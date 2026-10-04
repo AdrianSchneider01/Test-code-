@@ -133,8 +133,18 @@ export function vibeOverlap(product, vibes) {
   return product.vibes.filter((v) => (vibes || []).includes(v)).length;
 }
 
+// AI-interpreted feedback (decline.ai) takes priority; otherwise "Something
+// else" notes fall back to keyword matching.
 function effectiveReasons(decline) {
-  return decline.reason === 'other' ? interpretNote(decline.note) : [decline.reason];
+  if (decline.reason !== 'other') return [decline.reason];
+  if (decline.ai) return decline.ai.reasons;
+  return interpretNote(decline.note);
+}
+
+// The event's vibes plus any vibes AI derived from the user's own words.
+export function effectiveVibes(event) {
+  const hints = (event.vibeHints && event.vibeHints.vibes) || [];
+  return [...(event.vibes || []), ...hints.filter((v) => !(event.vibes || []).includes(v))];
 }
 
 // Constraints learned from declines within one slot ("find a cheaper one",
@@ -153,8 +163,22 @@ export function slotConstraints(event, categoryId, slotId) {
         if (r === 'size' && !c.avoidPacks.includes(s.packSize)) c.avoidPacks.push(s.packSize);
         if (r === 'theme') c.minVibe = Math.max(c.minVibe, s.vibeOverlap + 1);
       });
+      if (d.ai) d.ai.avoidColours.forEach((col) => !c.avoidColours.includes(col) && c.avoidColours.push(col));
     });
   return c;
+}
+
+// What AI feedback in this slot says the user would like instead (soft boosts).
+function slotPreferences(event, categoryId, slotId) {
+  const p = { colours: [], styles: [], vibes: [] };
+  event.declines
+    .filter((d) => d.category === categoryId && d.slot === slotId && d.ai)
+    .forEach((d) => {
+      p.colours.push(...d.ai.preferColours);
+      p.styles.push(...d.ai.preferStyles);
+      p.vibes.push(...d.ai.preferVibes);
+    });
+  return p;
 }
 
 function hasConstraints(c) {
@@ -184,8 +208,9 @@ function eventSoftAvoid(event, categoryId, slotId) {
   return { colours, styles };
 }
 
-function passes(product, guests, c) {
-  if (c.maxLine != null && lineTotal(product, guests) >= c.maxLine) return false;
+function passes(product, event, c) {
+  if (c.maxLine != null && lineTotal(product, event.guests) >= c.maxLine) return false;
+  if (c.minVibe > 0 && vibeOverlap(product, effectiveVibes(event)) < c.minVibe) return false;
   if (c.avoidColours.includes(product.colour)) return false;
   if (c.avoidStyles.includes(product.style)) return false;
   if (c.avoidPacks.includes(product.packSize)) return false;
@@ -210,10 +235,35 @@ function scoreProduct(product, event, ctx, cons, relaxed) {
     if (cons.minVibe > 0) reasons.push('Closer to your theme');
   }
 
-  // Theme / vibe match.
-  const matched = product.vibes.filter((v) => (event.vibes || []).includes(v));
+  // "Ask Event Master" requests (AI-interpreted) steer the rest of the plan.
+  // They're explicit, current requests, so they outweigh the original vibe.
+  (event.refinements || []).forEach((r) => {
+    let delta = 0;
+    delta += 4 * Math.min(2, product.vibes.filter((v) => r.preferVibes.includes(v)).length);
+    if (r.preferColours.includes(product.colour)) delta += 4;
+    if (r.preferStyles.includes(product.style)) delta += 3;
+    if (r.avoidColours.includes(product.colour)) delta -= 6;
+    if (r.avoidStyles.includes(product.style)) delta -= 6;
+    if (r.maxPrice != null && lt > r.maxPrice) delta -= 10;
+    score += delta;
+    if (delta > 0 && r.summary && reasons.length < 2) reasons.push(`As you asked: ${r.summary}`);
+  });
+
+  // Preferences from AI-interpreted decline feedback in this slot.
+  const prefs = slotPreferences(event, product.category, product.slot);
+  if (prefs.colours.includes(product.colour)) score += 2;
+  if (prefs.styles.includes(product.style)) score += 2;
+  score += 1.5 * Math.min(2, product.vibes.filter((v) => prefs.vibes.includes(v)).length);
+
+  // Theme / vibe match (including vibes AI read from the user's own description).
+  const vibes = effectiveVibes(event);
+  const matched = product.vibes.filter((v) => vibes.includes(v));
   score += 3 * matched.length;
   if (matched.length) reasons.push(`Matches your ${matched.slice(0, 2).map(vibeLabel).join(' + ')} vibe`);
+  if (event.vibeHints) {
+    if (event.vibeHints.colours.includes(product.colour)) score += 1;
+    if (event.vibeHints.styles.includes(product.style)) score += 1;
+  }
 
   // Compatibility with items already accepted for this event.
   const accepted = event.items.filter((i) => i.colour && !(i.category === product.category && i.slot === product.slot));
@@ -297,7 +347,7 @@ export function rankCandidates(event, categoryId, slotId, ctx, opts = {}) {
       !avoidShops.includes(p.retailer),
   );
   const cons = slotConstraints(event, categoryId, slotId);
-  let list = pool.filter((p) => passes(p, event.guests, cons));
+  let list = pool.filter((p) => passes(p, event, cons));
   let relaxed = false;
   if (!list.length && pool.length) {
     list = pool;
@@ -350,7 +400,8 @@ export function applyAccept(event, suggestion) {
   };
 }
 
-export function applyDecline(event, suggestion, reason, note = '') {
+// `ai` is the sanitised result of the AI "feedback" task for a "Something else" note.
+export function applyDecline(event, suggestion, reason, note = '', ai = null) {
   const p = suggestion.product;
   const decline = {
     id: uid('dec'),
@@ -359,6 +410,7 @@ export function applyDecline(event, suggestion, reason, note = '') {
     slot: p.slot,
     reason,
     note: note.trim(),
+    ai: ai || null,
     snapshot: {
       name: p.name,
       lineTotal: suggestion.lineTotal,
@@ -366,10 +418,25 @@ export function applyDecline(event, suggestion, reason, note = '') {
       style: p.style,
       packSize: p.packSize,
       retailer: p.retailer,
-      vibeOverlap: vibeOverlap(p, event.vibes),
+      vibeOverlap: vibeOverlap(p, effectiveVibes(event)),
     },
   };
   return { ...event, declines: [...event.declines, decline] };
+}
+
+// "Ask Event Master": store an AI-interpreted request that steers suggestions.
+export function applyRefinement(event, text, result) {
+  const refinement = { id: uid('ref'), text: text.trim(), ...result };
+  return { ...event, refinements: [...(event.refinements || []), refinement] };
+}
+
+export function removeRefinement(event, id) {
+  return { ...event, refinements: (event.refinements || []).filter((r) => r.id !== id) };
+}
+
+// AI's reading of the user's own vibe / event description.
+export function applyVibeHints(event, hints) {
+  return { ...event, vibeHints: hints };
 }
 
 export function applySkip(event, categoryId, slotId) {

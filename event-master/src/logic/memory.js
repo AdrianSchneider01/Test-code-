@@ -195,5 +195,10 @@ export function eventLearnings(event) {
     const reason = DECLINE_REASONS.find((x) => x.id === r);
     if (reason) lines.push(`${reason.emoji} Declined ${byReason[r]}× — “${reason.label}”`);
   });
+  event.declines
+    .filter((d) => d.ai && d.ai.summary)
+    .forEach((d) => lines.push(`✨ From your feedback: ${d.ai.summary}`));
+  (event.refinements || []).forEach((r) => lines.push(`💬 You asked for: ${r.summary || r.text}`));
+  if (event.vibeHints && event.vibeHints.summary) lines.push(`🎨 Your vibe, as I understood it: ${event.vibeHints.summary}`);
   return lines;
 }

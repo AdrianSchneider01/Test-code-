@@ -4,8 +4,10 @@ import { FadeIn } from '../components/Effects';
 import { CategoryPicker, EssentialsFields, TypePicker, essentialsMissing, toggleCategory } from '../components/EventForm';
 import { Screen } from '../components/Screen';
 import { Button, Field, Gap, T } from '../components/ui';
+import { askAI, ownWordsText } from '../ai/client';
+import { applyVibeHints } from '../logic/engine';
 import { createEventFromDraft } from '../logic/events';
-import { useAppState } from '../state/AppState';
+import { useAI, useAppState } from '../state/AppState';
 import { useNav } from '../state/Navigation';
 
 function Heading({ title, subtitle }) {
@@ -101,7 +103,8 @@ export function PlanEssentialsScreen() {
 // SCREEN 5 — What do you want help with?
 export function PlanCategoriesScreen() {
   const nav = useNav();
-  const { setDraft, addEvent, clearDraft } = useAppState();
+  const { setDraft, addEvent, clearDraft, updateEvent } = useAppState();
+  const ai = useAI();
   const { draft, missing, goHome } = useDraftOrHome();
   if (missing) return <NoDraft goHome={goHome} />;
   const n = draft.categories.length;
@@ -110,6 +113,11 @@ export function PlanCategoriesScreen() {
     const ev = createEventFromDraft(draft);
     addEvent(ev);
     clearDraft();
+    // Understand an event or vibe described in the user's own words, in the background.
+    const words = ownWordsText(ev);
+    if (ai.enabled && words) {
+      askAI('vibe', { text: words }).then((hints) => hints && updateEvent(ev.id, (e) => applyVibeHints(e, hints)));
+    }
     nav.reset([{ name: 'home' }, { name: 'party', params: { eventId: ev.id } }]);
   };
 

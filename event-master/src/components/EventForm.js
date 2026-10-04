@@ -2,6 +2,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { CATEGORIES, EVENT_TYPES, VIBES } from '../data/categories';
 import { todayISO } from '../logic/util';
+import { useAI } from '../state/AppState';
 import { colors, useLayout } from '../theme';
 import { Calendar } from './Calendar';
 import { Card, Chip, Field, Grid, SectionTitle, Stepper, T } from './ui';
@@ -74,6 +75,7 @@ export function VenueFields({ venue, onChange }) {
 // onChange receives an updater function (prev => next) so rapid taps never
 // work from stale state.
 export function EssentialsFields({ value, onChange, allowPastDates }) {
+  const ai = useAI();
   const set = (patch) => onChange((prev) => ({ ...prev, ...patch }));
   const toggleVibe = (id) => onChange((prev) => ({ ...prev, vibes: prev.vibes.includes(id) ? prev.vibes.filter((v) => v !== id) : [...prev.vibes, id] }));
   return (
@@ -118,7 +120,14 @@ export function EssentialsFields({ value, onChange, allowPastDates }) {
           ))}
         </View>
         {value.vibes.includes('other') ? (
-          <Field style={{ marginTop: 14 }} label="Describe your vibe" value={value.otherVibe} onChangeText={(otherVibe) => set({ otherVibe })} placeholder="e.g. Under the sea" />
+          <View style={{ marginTop: 14 }}>
+            <Field label="Describe your vibe" value={value.otherVibe} onChangeText={(otherVibe) => set({ otherVibe })} placeholder="e.g. Under the sea" />
+            {ai.enabled ? (
+              <T variant="tiny" dim style={{ marginTop: 6 }}>
+                ✨ I’ll use AI to match your own words to colours, styles and vibes.
+              </T>
+            ) : null}
+          </View>
         ) : null}
       </Card>
     </View>
