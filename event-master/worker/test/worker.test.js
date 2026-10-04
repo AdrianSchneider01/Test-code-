@@ -112,6 +112,21 @@ describe('API', () => {
     ]);
   });
 
+  test('a pick outside the candidates sent is rejected (422)', async () => {
+    const input = {
+      event: { type: 'birthday', vibes: ['cute'], guests: 10, budget: 150 },
+      context: { lookingFor: 'Decorations — Balloons', accepted: [], declined: [], requests: [], profile: [], savedIdeas: [], partyIdeas: [], remainingBudget: 150 },
+      candidates: [
+        { id: 'bal-pink-20', name: 'Pink Balloon Set', colour: 'pink', style: 'cute', retailer: 'Party Lane', packLabel: '20 balloons', lineTotal: 5, vibes: ['cute'], whyRules: [] },
+        { id: 'bal-gold-confetti', name: 'Gold Confetti Balloons', colour: 'gold', style: 'classic', retailer: 'Party Lane', packLabel: '10 balloons', lineTotal: 18, vibes: ['elegant'], whyRules: [] },
+      ],
+    };
+    const bad = await handleApi(post('pick', input), ENV, { makeClient: fakeClient(textReply({ choiceId: 'made-up-item', reason: 'x' })) });
+    expect(bad.status).toBe(422);
+    const good = await handleApi(post('pick', input), ENV, { makeClient: fakeClient(textReply({ choiceId: 'bal-gold-confetti', reason: 'Elegant' })) });
+    expect((await good.json()).result).toEqual({ choiceId: 'bal-gold-confetti', reason: 'Elegant' });
+  });
+
   test('refusal and truncated output become 422', async () => {
     const r1 = await handleApi(post('vibe', { text: 'x' }), ENV, { makeClient: fakeClient({ stop_reason: 'refusal', content: [] }) });
     expect(r1.status).toBe(422);
@@ -124,7 +139,7 @@ describe('API', () => {
     expect((await handleApi(post('feedback', { note: '' , product }), ENV, mk)).status).toBe(400);
     expect((await handleApi(post('feedback', '{oops'), ENV, mk)).status).toBe(400);
     expect((await handleApi(post('hack', {}), ENV, mk)).status).toBe(404);
-    expect((await handleApi(post('vibe', { text: 'a'.repeat(9000) }), ENV, mk)).status).toBe(413);
+    expect((await handleApi(post('vibe', { text: 'a'.repeat(30000) }), ENV, mk)).status).toBe(413);
     expect((await handleApi(post('vibe', { text: 'ok' }), {}, mk)).status).toBe(503);
   });
 

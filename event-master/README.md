@@ -64,6 +64,7 @@ AI is optional. Without it, the app falls back to built-in rules. With it, the s
 
 | Where | What AI does |
 |---|---|
+| **Every suggestion** | The rules first filter and rank real products, removing declined items, avoided shops, and colours, styles and prices you ruled out. Claude then picks the best fit from the top few, using everything known: your requests, declines and the reasons, your own words for the vibe, items already accepted, your profile (if you opted in for this event), saved ideas and party ideas. The card shows "✨" with why it was chosen. Claude can only choose from that list, and the result is cached so it only re-picks when something changes |
 | Decline → "Something else" | Understands free-text feedback (for example "feels a bit much for little ones") and adapts the next suggestion |
 | Suggestion → ✨ Ask Event Master | Requests like "something more elegant" or "no pink" steer the rest of the plan. Each shows as a chip you can tap to remove |
 | Suggestion → ✨ Explain this pick | A friendlier explanation, written only from facts the app supplies |

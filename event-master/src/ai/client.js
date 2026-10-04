@@ -35,44 +35,20 @@ export function checkAI() {
 
 // Runs an AI task. Returns the sanitised result, or null if AI is unavailable
 // or anything goes wrong — callers always have a non-AI fallback.
-export async function askAI(task, input) {
+export async function askAI(task, input, timeoutMs = 30000) {
   if (!(await checkAI())) return null;
   try {
     const res = await fetchWithTimeout(
       `${BASE}/api/ai/${task}`,
       { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input) },
-      30000,
+      timeoutMs,
     );
     if (!res.ok) return null;
     const body = await res.json();
-    return body && body.result ? sanitizeOutput(task, body.result) : null;
+    return body && body.result ? sanitizeOutput(task, body.result, input) : null;
   } catch {
     return null;
   }
 }
 
-// ── Input builders: only what the AI needs (no event names or venues) ──────
-export function eventInfo(event) {
-  return {
-    type: event.type || null,
-    typeOther: event.typeOther || '',
-    otherVibe: event.otherVibe || '',
-    vibes: (event.vibes || []).filter((v) => v !== 'other'),
-    guests: event.guests,
-    budget: event.budget ?? null,
-    categories: event.categories || [],
-  };
-}
-
-export function productFacts(suggestion) {
-  const p = suggestion.product;
-  return { name: p.name, colour: p.colour, style: p.style, retailer: p.retailer, lineTotal: suggestion.lineTotal };
-}
-
-// Text describing an event in the user's own words, if any.
-export function ownWordsText(event) {
-  const parts = [];
-  if (event.type === 'other' && event.typeOther) parts.push(`Event: ${event.typeOther}`);
-  if ((event.vibes || []).includes('other') && event.otherVibe) parts.push(`Vibe: ${event.otherVibe}`);
-  return parts.join('. ');
-}
+export { eventInfo, ownWordsText, productFacts } from './inputs';

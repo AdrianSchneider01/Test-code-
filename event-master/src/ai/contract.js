@@ -55,6 +55,9 @@ export const TASKS = {
   },
   // A short, friendly summary of the user's memory profile.
   profileSummary: { schema: obj({ summary: str }) },
+  // Choose the best-fitting product from candidates the app has already
+  // filtered, using everything known about the party and the user.
+  pick: { schema: obj({ choiceId: str, reason: str }) },
   // A friendlier explanation of why a product was suggested (facts supplied by the app).
   explain: { schema: obj({ explanation: str }) },
   // Party ideas (themes, activities, touches) — ideas only, never products.
@@ -108,7 +111,9 @@ function memoryValue(type, value) {
   }
 }
 
-export function sanitizeOutput(task, raw) {
+// `input` (optional) lets tasks check the answer against what was asked —
+// e.g. a pick must be one of the candidates that were sent.
+export function sanitizeOutput(task, raw, input) {
   const r = raw && typeof raw === 'object' ? raw : {};
   switch (task) {
     case 'feedback':
@@ -150,6 +155,12 @@ export function sanitizeOutput(task, raw) {
           return true;
         });
       return { memories: memories.slice(0, 12) };
+    }
+    case 'pick': {
+      const ids = input && Array.isArray(input.candidates) ? input.candidates.map((c) => c.id) : null;
+      const choiceId = typeof r.choiceId === 'string' ? r.choiceId.trim() : '';
+      if (!choiceId || (ids && !ids.includes(choiceId))) return null;
+      return { choiceId, reason: text(r.reason, 160) };
     }
     case 'profileSummary':
       return { summary: text(r.summary, 400) };
@@ -197,6 +208,38 @@ function isEventInfo(e) {
   );
 }
 
+const isOptStrList = (v, maxItems) => v == null || (Array.isArray(v) && v.length <= maxItems && v.every((s) => typeof s === 'string' && s.length <= 300));
+
+function isCandidate(c) {
+  return (
+    isObj(c) &&
+    isText(c.id, 60) &&
+    isText(c.name, 120) &&
+    isOptText(c.colour, 40) &&
+    isOptText(c.style, 40) &&
+    isOptText(c.retailer, 60) &&
+    isOptText(c.packLabel, 60) &&
+    isOptNum(c.lineTotal) &&
+    isOptStrList(c.vibes, 10) &&
+    isOptStrList(c.whyRules, 6)
+  );
+}
+
+function isPickContext(c) {
+  return (
+    isObj(c) &&
+    isOptText(c.lookingFor, 120) &&
+    isOptStrList(c.accepted, 30) &&
+    isOptStrList(c.declined, 30) &&
+    isOptStrList(c.requests, 15) &&
+    isOptText(c.vibeUnderstanding, 200) &&
+    isOptStrList(c.profile, 30) &&
+    isOptStrList(c.savedIdeas, 15) &&
+    isOptStrList(c.partyIdeas, 10) &&
+    isOptNum(c.remainingBudget)
+  );
+}
+
 export function validateInput(task, input) {
   if (!isObj(input)) return false;
   switch (task) {
@@ -209,6 +252,15 @@ export function validateInput(task, input) {
       return isText(input.text, 1200);
     case 'profileSummary':
       return isStrList(input.memories, 40) && input.memories.length > 0;
+    case 'pick':
+      return (
+        isEventInfo(input.event) &&
+        isPickContext(input.context) &&
+        Array.isArray(input.candidates) &&
+        input.candidates.length >= 2 &&
+        input.candidates.length <= 8 &&
+        input.candidates.every(isCandidate)
+      );
     case 'explain':
       return isProduct(input.product) && isStrList(input.reasons, 6) && isEventInfo(input.event);
     case 'ideas':

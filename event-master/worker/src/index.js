@@ -12,7 +12,7 @@ import { TASKS, sanitizeOutput, validateInput } from '../../src/ai/contract.js';
 import { PROMPTS } from './prompts.js';
 
 export const MODEL = 'claude-opus-5-5';
-const MAX_BODY_BYTES = 8 * 1024;
+const MAX_BODY_BYTES = 24 * 1024;
 
 // Runs one AI task. Returns { result } or { error }.
 export async function runTask(client, task, input) {
@@ -40,7 +40,10 @@ export async function runTask(client, task, input) {
   } catch {
     return { error: 'bad_output' };
   }
-  return { result: sanitizeOutput(task, parsed) };
+  const result = sanitizeOutput(task, parsed, input);
+  // e.g. a "pick" that isn't one of the candidates sent.
+  if (!result) return { error: 'bad_output' };
+  return { result };
 }
 
 function corsHeaders(request, env) {

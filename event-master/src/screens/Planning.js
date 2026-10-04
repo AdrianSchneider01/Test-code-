@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { askAI, eventInfo, productFacts } from '../ai/client';
+import { applyPick, buildPickInput, pickKey as makePickKey, savedIdeaTitles } from '../ai/pick';
 
 import { Confetti, FadeIn } from '../components/Effects';
 import {
@@ -37,11 +38,11 @@ import {
   itemTotal,
   nextCategoryId,
   nextOpenSlot,
+  rankCandidates,
   removeRefinement,
-  suggestNext,
 } from '../logic/engine';
 import { formatDate, money } from '../logic/util';
-import { useAI, useAppState, useEvent, useIsSaved, useRecommendationContext } from '../state/AppState';
+import { useAI, useAppState, useEvent, useIsSaved, useMemories, useRecommendationContext } from '../state/AppState';
 import { useNav } from '../state/Navigation';
 import { colors, fonts, useLayout } from '../theme';
 
@@ -215,7 +216,8 @@ export function SuggestScreen() {
   const nav = useNav();
   const { params } = nav.route;
   const event = useEvent(params.eventId);
-  const { updateEvent, toggleSavedIdea } = useAppState();
+  const { updateEvent, toggleSavedIdea, memory, savedIdeas } = useAppState();
+  const memories = useMemories();
   const ctx = useRecommendationContext(event);
   const toast = useToast();
   const { sideBySide, width } = useLayout();
@@ -237,8 +239,28 @@ export function SuggestScreen() {
   const replaceItem = event && params.replaceItemId ? event.items.find((i) => i.id === params.replaceItemId) : null;
   const catId = !event ? null : replaceItem ? replaceItem.category : nextCategoryId(event, preferred);
   const slot = !catId ? null : replaceItem ? getSlot(replaceItem.category, replaceItem.slot) : nextOpenSlot(event, catId);
-  const result = event && catId && slot ? suggestNext(event, catId, slot.id, ctx, { excludeIds: replaceItem && replaceItem.productId ? [replaceItem.productId] : [] }) : null;
-  const suggestion = result ? result.suggestion : null;
+  const result = event && catId && slot ? rankCandidates(event, catId, slot.id, ctx, { excludeIds: replaceItem && replaceItem.productId ? [replaceItem.productId] : [] }) : null;
+
+  // AI pick: Claude chooses among the rules' top candidates using everything
+  // the app knows. Results are cached per situation; the rules' top pick is
+  // used if AI is off, slow or unavailable.
+  const [picks, setPicks] = useState({});
+  const inflight = useRef(new Set());
+  const pickInput =
+    ai.enabled && result
+      ? buildPickInput(event, catId, slot.id, result.list, {
+          profile: event.useMemory && memory.enabled ? memories.map((m) => m.text) : [],
+          savedIdeas: savedIdeaTitles(savedIdeas),
+        })
+      : null;
+  const pickKey = pickInput ? makePickKey(event, catId, slot.id, pickInput) : null;
+  useEffect(() => {
+    if (!pickKey || picks[pickKey] !== undefined || inflight.current.has(pickKey)) return;
+    inflight.current.add(pickKey);
+    askAI('pick', pickInput, 15000).then((res) => setPicks((p) => ({ ...p, [pickKey]: res || 'none' })));
+  }, [pickKey, pickInput, picks]);
+  const picking = !!pickKey && picks[pickKey] === undefined;
+  const suggestion = result && !picking ? applyPick(result.list, picks[pickKey]) : null;
   const savedIdea = useIsSaved('product', suggestion ? suggestion.product.id : '');
   const suggestionKey = `${catId}/${slot ? slot.id : ''}/${suggestion ? suggestion.product.id : 'none'}`;
 
@@ -419,6 +441,13 @@ export function SuggestScreen() {
           </Animated.View>
           {sideBySide ? <View style={styles.actions}>{actionButtons}</View> : null}
         </>
+      ) : picking ? (
+        <Card glow style={{ minHeight: 220, justifyContent: 'center' }}>
+          <Thinking label="Finding the best fit for you…" />
+          <T variant="tiny" dim center>
+            Using everything I know about this party{event.useMemory && memory.enabled ? ' and you' : ''}.
+          </T>
+        </Card>
       ) : (
         <Card>
           <T variant="h2">I’ve run out of options for {slot.name.toLowerCase()}.</T>
