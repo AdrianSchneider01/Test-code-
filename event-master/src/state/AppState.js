@@ -1,0 +1,119 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+
+import { DEFAULT_MEMORY, effectiveMemories, profileFromMemories } from '../logic/memory';
+import { uid } from '../logic/util';
+
+// Everything is stored on the device (AsyncStorage → localStorage on web).
+// A cloud backend (Supabase) can replace this layer later.
+const STORAGE_KEY = 'eventmaster:v1';
+
+const AppStateContext = createContext(null);
+
+const EMPTY = { events: [], memory: DEFAULT_MEMORY, savedIdeas: [] };
+
+export function AppStateProvider({ children }) {
+  const [data, setData] = useState(EMPTY);
+  const [draft, setDraftState] = useState(null);
+  const [hydrated, setHydrated] = useState(false);
+  const saveTimer = useRef(null);
+
+  useEffect(() => {
+    let alive = true;
+    AsyncStorage.getItem(STORAGE_KEY)
+      .then((raw) => {
+        if (!alive || !raw) return;
+        const parsed = JSON.parse(raw);
+        setData({
+          events: Array.isArray(parsed.events) ? parsed.events : [],
+          memory: { ...DEFAULT_MEMORY, ...(parsed.memory || {}) },
+          savedIdeas: Array.isArray(parsed.savedIdeas) ? parsed.savedIdeas : [],
+        });
+      })
+      .catch(() => {})
+      .finally(() => alive && setHydrated(true));
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return undefined;
+    clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(data)).catch(() => {});
+    }, 250);
+    return () => clearTimeout(saveTimer.current);
+  }, [data, hydrated]);
+
+  const setDraft = useCallback((patch) => {
+    setDraftState((d) => (typeof patch === 'function' ? patch(d) : { ...d, ...patch }));
+  }, []);
+
+  const actions = useMemo(
+    () => ({
+      setDraft,
+      clearDraft: () => setDraftState(null),
+      startDraft: (d) => setDraftState(d),
+      addEvent: (ev) => setData((s) => ({ ...s, events: [...s.events, ev] })),
+      updateEvent: (id, fn) =>
+        setData((s) => ({ ...s, events: s.events.map((e) => (e.id === id ? { ...fn(e), updatedAt: new Date().toISOString() } : e)) })),
+      deleteEvent: (id) => setData((s) => ({ ...s, events: s.events.filter((e) => e.id !== id) })),
+      saveParty: (id) =>
+        setData((s) => ({
+          ...s,
+          events: s.events.map((e) => (e.id === id ? { ...e, status: 'saved', savedAt: new Date().toISOString() } : e)),
+        })),
+      setMemory: (fn) => setData((s) => ({ ...s, memory: fn(s.memory) })),
+      toggleSavedIdea: (kind, refId) =>
+        setData((s) => {
+          const exists = s.savedIdeas.some((x) => x.kind === kind && x.refId === refId);
+          return {
+            ...s,
+            savedIdeas: exists
+              ? s.savedIdeas.filter((x) => !(x.kind === kind && x.refId === refId))
+              : [...s.savedIdeas, { id: uid('idea'), kind, refId, savedAt: new Date().toISOString() }],
+          };
+        }),
+    }),
+    [setDraft],
+  );
+
+  const value = useMemo(() => ({ ...data, draft, hydrated, ...actions }), [data, draft, hydrated, actions]);
+  return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;
+}
+
+export function useAppState() {
+  const ctx = useContext(AppStateContext);
+  if (!ctx) throw new Error('useAppState must be used inside AppStateProvider');
+  return ctx;
+}
+
+export function useEvent(id) {
+  const { events } = useAppState();
+  return events.find((e) => e.id === id) || null;
+}
+
+export function useMemories() {
+  const { events, memory } = useAppState();
+  return useMemo(() => effectiveMemories(events, memory), [events, memory]);
+}
+
+// Recommendation context for an event: memory is used only if the user turned
+// it on globally AND chose "Yes, use them" for this event.
+export function useRecommendationContext(event) {
+  const { memory, savedIdeas } = useAppState();
+  const memories = useMemories();
+  return useMemo(
+    () => ({
+      profile: event && event.useMemory && memory.enabled ? profileFromMemories(memories) : null,
+      savedProductIds: savedIdeas.filter((x) => x.kind === 'product').map((x) => x.refId),
+    }),
+    [event, memory.enabled, memories, savedIdeas],
+  );
+}
+
+export function useIsSaved(kind, refId) {
+  const { savedIdeas } = useAppState();
+  return savedIdeas.some((x) => x.kind === kind && x.refId === refId);
+}
