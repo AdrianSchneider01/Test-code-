@@ -1,0 +1,12 @@
+{
+  "name": "strava-dashboard-worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev --var DEV_BYPASS_AUTH:true"
+  },
+  "devDependencies": {
+    "wrangler": "4.135.0"
+  }
+}
