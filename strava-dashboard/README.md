@@ -13,9 +13,18 @@ One dashboard (`app/dashboard.jsx`), two ways to open it:
 
 This works like the `portfolio` Worker: Cloudflare Access protects it, the page is served from `cloudflare/public`, and data lives in the `strava-dashboard` KV namespace (already created and referenced in `wrangler.toml`).
 
-1. **Create a Strava API app** at https://www.strava.com/settings/api.
-   - *Authorization Callback Domain*: `strava-dashboard.<your-subdomain>.workers.dev` (just the host name, no `https://`).
-   - Note the **Client ID** and **Client Secret**.
+1. **Create a Strava API app** while signed in to Strava on a computer: https://www.strava.com/settings/api (or Strava → profile picture → Settings → My API Application).
+   - First find your workers.dev subdomain: Cloudflare dashboard → Workers & Pages → `portfolio`. Its URL looks like `portfolio.<your-subdomain>.workers.dev`. This Worker will be at `strava-dashboard.<your-subdomain>.workers.dev`.
+   - Fill in the form:
+     - *Application Name*: anything, e.g. `Training Dashboard`
+     - *Category*: `Visualizer`
+     - *Club*: leave blank
+     - *Website*: `https://strava-dashboard.<your-subdomain>.workers.dev`
+     - *Application Description*: e.g. `Personal training dashboard`
+     - *Authorization Callback Domain*: `strava-dashboard.<your-subdomain>.workers.dev` (host name only: no `https://`, no path)
+   - Accept the API agreement and press **Create**. If Strava asks for an app icon, upload any small image.
+   - The page then shows your **Client ID** (a number) and **Client Secret** (press *show*). Keep the secret private: it only goes into `wrangler secret put`, never into a file.
+   - A new app is limited to your own Strava account, which is all this dashboard needs. `localhost` is always allowed as a callback, so local testing needs no extra setting.
 
 2. **Deploy once** from your laptop:
    ```sh
@@ -49,7 +58,7 @@ npm run build     # rebuilds cloudflare/public/ and artifact/index.html
 cd cloudflare && npx wrangler deploy
 ```
 
-Local development: `cd cloudflare && npm run dev` (skips Access on localhost). Set `STRAVA_CLIENT_SECRET` in `cloudflare/.dev.vars` and add `localhost` as a Strava callback domain.
+Local development: `cd cloudflare && npm run dev` (skips Access on localhost). Set `STRAVA_CLIENT_SECRET` in `cloudflare/.dev.vars` (Strava always accepts `localhost` callbacks).
 
 ## Notes
 
