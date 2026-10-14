@@ -5,7 +5,7 @@ One dashboard (`app/dashboard.jsx`), two ways to open it:
 | | Where | Strava data comes from | Settings saved in |
 |---|---|---|---|
 | **claude.ai artifact** | https://claude.ai/artifact/SK4PjpBdnFV7e2HBUSVrXx | your claude.ai Strava connector | your claude.ai account |
-| **Cloudflare Worker** | `https://strava-dashboard.<your-subdomain>.workers.dev` | the Strava API, via the Worker | the Worker's KV |
+| **Cloudflare Worker** | `https://strava-dashboard.adrian-ddf.workers.dev` | the Strava API, via the Worker | the Worker's KV |
 
 `StravaDashboard.jsx` is the older single-file version for pasting into a claude.ai chat.
 

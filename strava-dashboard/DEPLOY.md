@@ -9,8 +9,8 @@ Have two tabs open: **Cloudflare** (https://dash.cloudflare.com) and **Strava** 
 ## Step 1: Note your workers.dev address (1 min)
 
 1. Cloudflare → left menu **Workers & Pages** (under **Compute** on some accounts).
-2. Click **portfolio**. Its address looks like `portfolio.SOMETHING.workers.dev`.
-3. Your dashboard will be at **`strava-dashboard.SOMETHING.workers.dev`**. Use your own `SOMETHING` everywhere below.
+2. Click **portfolio**. Its address looks like `portfolio.adrian-ddf.workers.dev`.
+3. Your dashboard will be at **`strava-dashboard.adrian-ddf.workers.dev`**. Use your own `adrian-ddf` everywhere below.
 
 ---
 
@@ -29,7 +29,7 @@ Have two tabs open: **Cloudflare** (https://dash.cloudflare.com) and **Strava** 
    | Deploy command | `npx wrangler deploy` |
    | Root directory (under *Advanced settings*) | `strava-dashboard/cloudflare` |
 6. Click **Create and deploy** (or **Deploy**). Wait 1–2 minutes for the build log to show **Success**.
-7. Open `https://strava-dashboard.SOMETHING.workers.dev`. You should see **"Locked: Cloudflare Access is not configured for this Worker yet."** That's correct: it stays closed until Step 5.
+7. Open `https://strava-dashboard.adrian-ddf.workers.dev`. You should see **"Locked: Cloudflare Access is not configured for this Worker yet."** That's correct: it stays closed until Step 5.
 
 ---
 
@@ -42,9 +42,9 @@ Have two tabs open: **Cloudflare** (https://dash.cloudflare.com) and **Strava** 
    | Application Name | `Training Dashboard` |
    | Category | `Visualizer` |
    | Club | blank |
-   | Website | `https://strava-dashboard.SOMETHING.workers.dev` |
+   | Website | `https://strava-dashboard.adrian-ddf.workers.dev` |
    | Application Description | `Personal training dashboard` |
-   | Authorization Callback Domain | `strava-dashboard.SOMETHING.workers.dev` (no `https://`, no `/`) |
+   | Authorization Callback Domain | `strava-dashboard.adrian-ddf.workers.dev` (no `https://`, no `/`) |
 3. Tick the agreement → **Create**. If asked for an icon, upload any small image.
 4. Leave this page open. It shows your **Client ID** and **Client Secret** (click *show*).
 
@@ -79,7 +79,7 @@ Have two tabs open: **Cloudflare** (https://dash.cloudflare.com) and **Strava** 
 
 ## Step 6: Open it (2 min)
 
-1. Open `https://strava-dashboard.SOMETHING.workers.dev` (a private window avoids old cached logins).
+1. Open `https://strava-dashboard.adrian-ddf.workers.dev` (a private window avoids old cached logins).
 2. Cloudflare Access asks for your email. Enter the code it sends you.
 3. Click **Connect Strava** → on Strava, keep *View data about your activities* ticked → **Authorize**.
 4. Your activities load. Bookmark the page, then set your goal in ⚙︎ Settings: Half marathon, 23 Nov 2026.

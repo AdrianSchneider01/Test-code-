@@ -1,4 +1,5 @@
 name = "strava-dashboard"
+# Live at https://strava-dashboard.adrian-ddf.workers.dev (deployed by Workers Builds from branch ccr-65eb6dcb-8s467i)
 main = "src/worker.js"
 compatibility_date = "2026-09-01"
 
