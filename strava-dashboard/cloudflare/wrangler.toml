@@ -2,6 +2,11 @@ name = "strava-dashboard"
 main = "src/worker.js"
 compatibility_date = "2026-09-01"
 
+# Settings live in the Cloudflare dashboard (Worker → Settings → Variables and Secrets), not in this file:
+#   STRAVA_CLIENT_ID, STRAVA_CLIENT_SECRET (secret), ACCESS_TEAM_DOMAIN, ACCESS_AUD, ALLOWED_EMAILS.
+# keep_vars stops each deploy from wiping them.
+keep_vars = true
+
 # The Worker runs first for every request so Cloudflare Access is checked before any file is served.
 [assets]
 directory = "./public"
@@ -11,10 +16,3 @@ run_worker_first = true
 [[kv_namespaces]]
 binding = "STRAVA"
 id = "560bd5c5f8e44d3f83d4f4ef0add023f"
-
-[vars]
-# Fill these in (see README). STRAVA_CLIENT_SECRET is a secret: `npx wrangler secret put STRAVA_CLIENT_SECRET`.
-STRAVA_CLIENT_ID = ""
-ACCESS_TEAM_DOMAIN = ""   # e.g. yourteam.cloudflareaccess.com
-ACCESS_AUD = ""           # Application Audience (AUD) tag from the Access application
-ALLOWED_EMAILS = ""       # comma-separated; leave blank to allow anyone your Access policy admits

@@ -11,43 +11,9 @@ One dashboard (`app/dashboard.jsx`), two ways to open it:
 
 ## Deploy to Cloudflare (one-time setup)
 
-This works like the `portfolio` Worker: Cloudflare Access protects it, the page is served from `cloudflare/public`, and data lives in the `strava-dashboard` KV namespace (already created and referenced in `wrangler.toml`).
+Everything happens in the browser: Cloudflare builds this folder straight from GitHub (Workers Builds) and redeploys on every push. Follow **[DEPLOY.md](DEPLOY.md)**.
 
-1. **Create a Strava API app** while signed in to Strava on a computer: https://www.strava.com/settings/api (or Strava → profile picture → Settings → My API Application).
-   - First find your workers.dev subdomain: Cloudflare dashboard → Workers & Pages → `portfolio`. Its URL looks like `portfolio.<your-subdomain>.workers.dev`. This Worker will be at `strava-dashboard.<your-subdomain>.workers.dev`.
-   - Fill in the form:
-     - *Application Name*: anything, e.g. `Training Dashboard`
-     - *Category*: `Visualizer`
-     - *Club*: leave blank
-     - *Website*: `https://strava-dashboard.<your-subdomain>.workers.dev`
-     - *Application Description*: e.g. `Personal training dashboard`
-     - *Authorization Callback Domain*: `strava-dashboard.<your-subdomain>.workers.dev` (host name only: no `https://`, no path)
-   - Accept the API agreement and press **Create**. If Strava asks for an app icon, upload any small image.
-   - The page then shows your **Client ID** (a number) and **Client Secret** (press *show*). Keep the secret private: it only goes into `wrangler secret put`, never into a file.
-   - A new app is limited to your own Strava account, which is all this dashboard needs. `localhost` is always allowed as a callback, so local testing needs no extra setting.
-
-2. **Deploy once** from your laptop:
-   ```sh
-   cd strava-dashboard/cloudflare
-   npm install
-   npx wrangler login          # skip if you're already logged in from the portfolio Worker
-   npx wrangler deploy
-   npx wrangler secret put STRAVA_CLIENT_SECRET   # paste the Client Secret
-   ```
-
-3. **Turn on Cloudflare Access** (same as for `portfolio`): Cloudflare dashboard → Workers & Pages → `strava-dashboard` → Settings → Domains & Routes → `workers.dev` → **Enable Cloudflare Access**. Then open **Manage Cloudflare Access** and allow only your email. Copy the **Application Audience (AUD) tag**.
-
-4. **Fill in `cloudflare/wrangler.toml` `[vars]`**:
-   - `STRAVA_CLIENT_ID`: from step 1
-   - `ACCESS_TEAM_DOMAIN`: the same value your portfolio Worker uses, e.g. `yourteam.cloudflareaccess.com`
-   - `ACCESS_AUD`: from step 3
-   - `ALLOWED_EMAILS`: your email
-
-   Then run `npx wrangler deploy` again.
-
-5. Open the workers.dev URL, sign in through Access, press **Connect Strava**, and approve. Your history loads, and later visits only fetch new activities. The Worker checks Strava at most every 5 minutes; **Settings → Full re-sync** refetches the latest 300.
-
-Until step 4 is done, the Worker answers "Locked: Cloudflare Access is not configured", so it is never open to the public.
+Like the `portfolio` Worker, it is protected by Cloudflare Access and keeps its data in the `strava-dashboard` KV namespace (already created and referenced in `wrangler.toml`). Strava keys and Access settings are set in the Worker's **Settings → Variables and Secrets**; `keep_vars = true` keeps deploys from wiping them.
 
 ## Change the dashboard
 
@@ -55,7 +21,7 @@ Until step 4 is done, the Worker answers "Locked: Cloudflare Access is not confi
 cd strava-dashboard
 npm install
 npm run build     # rebuilds cloudflare/public/ and artifact/index.html
-cd cloudflare && npx wrangler deploy
+git commit -am "..." && git push   # Cloudflare redeploys automatically
 ```
 
 Local development: `cd cloudflare && npm run dev` (skips Access on localhost). Set `STRAVA_CLIENT_SECRET` in `cloudflare/.dev.vars` (Strava always accepts `localhost` callbacks).
