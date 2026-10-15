@@ -1,6 +1,7 @@
 // Data source for the claude.ai artifact: Strava via the viewer's claude.ai connector (mcp capability),
 // settings in the viewer's private db subtree (falls back to this browser).
 import { fromRow } from "./dashboard.jsx";
+import { COACH_INSTRUCTIONS, COACH_SCHEMA, isReview } from "./coach.js";
 
 const STRAVA = "Strava"; // connector display name
 const SETTINGS_KEY = "dash_settings_v1";
@@ -22,7 +23,7 @@ const OWNER_DEFAULTS = {
 function fromStrava(a) {
   const s = a.summary || {};
   return fromRow([a.id, a.name, a.sport_type, a.start_local, s.distance, s.moving_time, s.elevation_gain,
-    s.relative_effort, s.total_calories, s.pr_count ?? s.achievement_count, s.avg_cadence]);
+    s.relative_effort, s.total_calories, s.pr_count ?? s.achievement_count, s.avg_cadence, s.elapsed_time]);
 }
 
 async function callWithRetry(mcp, tool, input) {
@@ -71,6 +72,38 @@ export const artifactSource = {
       },
       async save(s) { localSet(SETTINGS_KEY, s); if (ref) await ref.set(s); },
     };
+  },
+
+  // AI session review through the viewer's own Claude (sample capability). Cached in this browser.
+  async coachReview(activityId, context, refresh = false) {
+    const key = `coach:${activityId}`;
+    if (!refresh) { const c = localGet(key); if (c?.review) return c; }
+    const sample = await claudeUse("sample");
+    if (!sample) throw { code:"not_granted" };
+    const prompt = `${COACH_INSTRUCTIONS}
+
+Review this session. Reply with only a JSON object matching this JSON Schema:
+${JSON.stringify(COACH_SCHEMA)}
+
+Training data (JSON):
+${JSON.stringify(context)}`;
+    const review = await sample.json(prompt, { modelTier:"default", effort:"medium", cache: refresh ? { refresh:true } : true });
+    if (!isReview(review)) throw { code:"invalid_json" };
+    const out = { review, createdAt: Date.now() };
+    localSet(key, out);
+    return out;
+  },
+
+  coachErrorText(e) {
+    switch (e?.code) {
+      case "not_granted":
+      case "sampling_disabled": return "The AI coach needs permission to use Claude on this page. Allow it from the page's Permissions menu.";
+      case "rate_limited":
+      case "usage_limit":       return "You've hit your Claude usage limit for now. Try again later.";
+      case "invalid_json":      return "The coach's reply came back incomplete. Try again.";
+      case "refused":           return "The coach declined to review this session.";
+      default:                  return e?.message || "The coach couldn't review this session.";
+    }
   },
 
   // Copy per connector error code (see the mcp capability's failure design).

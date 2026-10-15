@@ -33,6 +33,22 @@ export const cloudflareSource = {
     };
   },
 
+  // AI session review (Claude, via the Worker). Cached server-side per activity.
+  async coachReview(activityId, context, refresh = false) {
+    const body = await api("/api/coach", { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ activityId, context, refresh }) });
+    return body; // { review, model, createdAt }
+  },
+
+  coachErrorText(e) {
+    switch (e?.code) {
+      case "coach_not_configured": return "The AI coach needs an Anthropic API key. Add ANTHROPIC_API_KEY as a secret in the Worker's Variables and Secrets.";
+      case "coach_limit":          return "You've reached today's AI review limit. Reviews reset tomorrow.";
+      case "coach_busy":           return "The coach is busy right now. Try again in a minute.";
+      case "offline":              return "You appear to be offline.";
+      default:                     return e?.message || "The coach couldn't review this session.";
+    }
+  },
+
   errorText(e) {
     switch (e?.code) {
       case "not_connected": return { text:"Connect your Strava account to load your activities.", retry:false, action:{ label:"Connect Strava", href:"/auth/strava" } };

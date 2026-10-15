@@ -3,6 +3,7 @@ import {
   BarChart, Bar, Cell, XAxis, YAxis, ResponsiveContainer, Tooltip, CartesianGrid,
   ReferenceLine, Area, AreaChart, LineChart, Line,
 } from "recharts";
+import { buildPlan, scorePlan, classifyRun, quickReview, buildCoachContext, nextPlanned } from "./coach.js";
 
 // ── Theme ─────────────────────────────────────────────────────────────────────
 const BG = "#000", CARD = "#1c1c1e", CARD2 = "#2c2c2e", SEP = "#2c2c2e", TEXT = "#fff", MUTED = "#8e8e93";
@@ -69,14 +70,15 @@ function kindOf(type = "") {
   if (/swim/i.test(type)) return "swim";
   return "other";
 }
-// Compact row: [id, name, sport_type, start_local, distance_m, moving_time_s, elevation_gain_m, relative_effort, calories, pr_count, avg_cadence]
+// Compact row: [id, name, sport_type, start_local, distance_m, moving_time_s, elevation_gain_m, relative_effort, calories, pr_count, avg_cadence, elapsed_time_s]
 export function fromRow(r) {
-  const [id, name, type, start, m, s, elev, re, cal, prs, cad] = r;
+  const [id, name, type, start, m, s, elev, re, cal, prs, cad, el] = r;
   return {
     id:String(id), name:name||type, type, kind:kindOf(type),
     date:String(start).slice(0,10), time:String(start).slice(11,16),
     km:(+m||0)/1000, min:(+s||0)/60, elev:+elev||0,
     re: re == null ? null : +re, cal: cal == null ? null : +cal, prs:+prs||0, cad: cad == null ? null : +cad,
+    elapsed: el == null ? null : +el/60,
   };
 }
 // Strava's relative effort is missing on some activities; estimate from duration so load charts don't dip to zero.
@@ -451,6 +453,193 @@ function CalendarHeatmap({ days, kinds }) {
   );
 }
 
+// ── Coach tab ─────────────────────────────────────────────────────────────────
+const RATING = {
+  great:               { label:"Great session", color:GREEN },
+  on_target:           { label:"On target", color:BLUE },
+  harder_than_ideal:   { label:"Harder than ideal", color:AMBER },
+  easier_than_planned: { label:"Easier than planned", color:PURPLE },
+  caution:             { label:"Take care", color:RED },
+};
+
+function useCoachPlan(acts, settings, long4) {
+  return useMemo(() => {
+    const runs = acts.filter(a => a.kind === "run");
+    const classed = runs.map(a => ({ ...a, _class: classifyRun(a, runs) }));
+    return scorePlan(buildPlan(settings.goal, long4), classed);
+  }, [acts, settings.goal, long4]);
+}
+
+function CoachTab({ acts, settings, d, plan, source, selectedId, setSelectedId, onOpenSettings, onOpenActivity }) {
+  const recent = acts.slice(0, 12);
+  const a = acts.find(x => x.id === selectedId) || acts[0];
+  const [state, setState] = useState({}); // id -> { status, data, error }
+  const q = useMemo(() => quickReview(a, acts, plan), [a, acts, plan]);
+  const hasAI = typeof source.coachReview === "function";
+  const st = state[a.id] || {};
+
+  const load = useCallback(async (refresh = false) => {
+    const fit = d.series.find(x => x.date === a.date) || d.cur;
+    const context = buildCoachContext(a, acts, settings, fit, plan);
+    setState(s => ({ ...s, [a.id]: { ...s[a.id], status:"loading", error:null } }));
+    try {
+      const data = await source.coachReview(a.id, context, refresh);
+      setState(s => ({ ...s, [a.id]: { status:"done", data } }));
+    } catch (e) {
+      setState(s => ({ ...s, [a.id]: { status:"error", error: source.coachErrorText(e) } }));
+    }
+  }, [a, acts, settings, plan, d, source]);
+
+  // Review each session the first time it's opened (the server/browser cache makes repeat visits free).
+  useEffect(() => { if (hasAI && !state[a.id]) load(false); }, [a.id, hasAI]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const k = KIND[a.kind];
+  const pw = plan?.weeks.find(w => w.key === dateKey(getWeekStart(new Date())));
+  const next = nextPlanned(plan, dateKey(new Date()));
+  const r = st.data?.review;
+  const rating = r && (RATING[r.rating] || RATING.on_target);
+  const stat = (l, v) => (
+    <div style={{ background:"#111", borderRadius:10, padding:"10px 12px", minWidth:0 }}>
+      <p style={{ margin:"0 0 3px", fontSize:10, color:MUTED, textTransform:"uppercase", letterSpacing:"0.06em" }}>{l}</p>
+      <p style={{ margin:0, fontSize:16, fontWeight:700, fontVariantNumeric:"tabular-nums" }}>{v}</p>
+    </div>
+  );
+
+  return (<>
+    {/* Session picker */}
+    <section style={{ marginBottom:14 }}>
+      <p style={label}>Sessions</p>
+      <div role="listbox" aria-label="Choose a session" style={{ display:"flex", gap:8, overflowX:"auto", paddingBottom:4 }}>
+        {recent.map(x => {
+          const on = x.id === a.id;
+          return (
+            <button key={x.id} role="option" aria-selected={on} onClick={()=>setSelectedId(x.id)}
+              style={{ ...btn, flexShrink:0, textAlign:"left", padding:"8px 12px", background:on?"#fff":CARD2, color:on?"#000":TEXT, border:`1px solid ${on?"#fff":SEP}` }}>
+              <span style={{ display:"block", fontSize:11, color:on?"#444":MUTED, fontWeight:500 }}>{fmtDayW(x.date)}</span>
+              <span style={{ fontSize:13 }}>{KIND[x.kind].icon} {fmtDist(x)}</span>
+            </button>
+          );
+        })}
+      </div>
+    </section>
+
+    {/* Session summary */}
+    <section style={{ ...card, marginBottom:14 }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:10, marginBottom:12 }}>
+        <div style={{ minWidth:0 }}>
+          <p style={{ margin:"0 0 2px", fontSize:12, color:MUTED }}>{fmtDayLong(a.date)}{a.time ? ` · ${a.time}` : ""}</p>
+          <p style={{ margin:0, fontSize:18, fontWeight:700 }}>{k.icon} {a.name}</p>
+        </div>
+        <span style={{ fontSize:11, fontWeight:700, color:k.color, background:`${k.color}22`, padding:"4px 9px", borderRadius:999, flexShrink:0 }}>{q.label}</span>
+      </div>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(96px, 1fr))", gap:8, marginBottom:12 }}>
+        {stat("Distance", fmtDist(a))}
+        {stat("Time", fmtDur(a.min))}
+        {stat(a.kind === "ride" ? "Speed" : "Pace", fmtSpeed(a) || "–")}
+        {stat("Effort", a.re ?? "–")}
+        {a.kind === "run" && a.cad ? stat("Cadence", `${Math.round(a.cad*2)}`) : stat("Elevation", `${Math.round(a.elev)} m`)}
+      </div>
+      <p style={{ margin:"0 0 6px", fontSize:13, fontWeight:700 }}>Quick read: {q.verdict}</p>
+      <ul style={{ margin:0, paddingLeft:18, display:"grid", gap:4 }}>
+        {q.notes.map((n,i) => <li key={i} style={{ fontSize:13, color:"#e5e5ea", lineHeight:1.45 }}>{n}</li>)}
+      </ul>
+      <button onClick={()=>onOpenActivity(a)} style={{ ...btn, marginTop:12, fontSize:11, padding:"6px 10px" }}>Full details</button>
+    </section>
+
+    {/* AI coach review */}
+    {hasAI && (
+      <section aria-live="polite" style={{ ...card, marginBottom:14, borderColor: rating ? `${rating.color}55` : SEP, background:"linear-gradient(160deg,#1d1d22,#141418)" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, marginBottom:10 }}>
+          <p style={{ ...label, margin:0 }}>🧑‍🏫 Coach review</p>
+          {st.status !== "loading" && (st.status === "done" || st.status === "error") && (
+            <button onClick={()=>load(true)} style={{ ...btn, padding:"5px 10px", fontSize:11 }}>↻ {st.status === "error" ? "Try again" : "New review"}</button>
+          )}
+        </div>
+        {st.status === "loading" || !st.status ? (
+          <div style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 0" }}>
+            <span aria-hidden="true" style={{ width:18, height:18, border:`2px solid ${CARD2}`, borderTopColor:ORANGE, borderRadius:"50%", animation:REDUCE_MOTION ? "none" : "spin 1s linear infinite", display:"inline-block" }}/>
+            <span style={{ fontSize:13, color:MUTED }}>Your coach is reviewing this session…</span>
+          </div>
+        ) : st.status === "error" ? (
+          <p style={{ margin:0, fontSize:13, color:"#e5e5ea", lineHeight:1.5 }}>{st.error}</p>
+        ) : r && (<>
+          <span style={{ display:"inline-block", fontSize:11, fontWeight:700, color:rating.color, background:`${rating.color}22`, padding:"3px 9px", borderRadius:999, marginBottom:8 }}>{rating.label}</span>
+          <p style={{ margin:"0 0 8px", fontSize:18, fontWeight:700, lineHeight:1.3, textWrap:"balance" }}>{r.headline}</p>
+          <p style={{ margin:"0 0 14px", fontSize:14, color:"#e5e5ea", lineHeight:1.55 }}>{r.summary}</p>
+          {r.went_well.length > 0 && (<>
+            <p style={{ margin:"0 0 6px", fontSize:12, fontWeight:700, color:GREEN }}>What went well</p>
+            <ul style={{ margin:"0 0 12px", paddingLeft:18, display:"grid", gap:4 }}>{r.went_well.map((x,i) => <li key={i} style={{ fontSize:13, lineHeight:1.45 }}>{x}</li>)}</ul>
+          </>)}
+          {r.watch_outs.length > 0 && (<>
+            <p style={{ margin:"0 0 6px", fontSize:12, fontWeight:700, color:AMBER }}>Watch out for</p>
+            <ul style={{ margin:"0 0 12px", paddingLeft:18, display:"grid", gap:4 }}>{r.watch_outs.map((x,i) => <li key={i} style={{ fontSize:13, lineHeight:1.45 }}>{x}</li>)}</ul>
+          </>)}
+          <div style={{ background:"#0f1a2b", border:`1px solid ${BLUE}44`, borderRadius:12, padding:"12px 14px", marginBottom:10 }}>
+            <p style={{ margin:"0 0 4px", fontSize:11, color:BLUE, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.06em" }}>Next session · {r.next_session.when}</p>
+            <p style={{ margin:"0 0 4px", fontSize:15, fontWeight:700 }}>{r.next_session.session}</p>
+            <p style={{ margin:0, fontSize:12, color:MUTED, lineHeight:1.45 }}>{r.next_session.why}</p>
+          </div>
+          <p style={{ margin:"0 0 8px", fontSize:13, lineHeight:1.5 }}><b>This week:</b> {r.week_focus}</p>
+          <p style={{ margin:0, fontSize:10, color:MUTED }}>AI coach (Claude){st.data.createdAt ? ` · ${relTime(st.data.createdAt)}` : ""}. A guide, not medical advice.</p>
+        </>)}
+      </section>
+    )}
+
+    {/* Plan */}
+    {!plan ? (
+      <section style={{ ...card, marginBottom:14, display:"flex", gap:12, alignItems:"center" }}>
+        <span style={{ fontSize:26 }}>🗓️</span>
+        <p style={{ margin:0, fontSize:13, color:"#e5e5ea", flex:1, lineHeight:1.45 }}>Set an upcoming goal race to get a week-by-week plan your coach can check sessions against.</p>
+        <button onClick={onOpenSettings} style={{ ...btn, background:ORANGE }}>Set goal</button>
+      </section>
+    ) : (<>
+      {pw && (
+        <section style={{ ...card, marginBottom:14 }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", gap:8, marginBottom:10 }}>
+            <p style={{ ...label, margin:0 }}>This week · {pw.phase}</p>
+            <span style={{ fontSize:12, color:MUTED }}>{pw.weeksOut === 0 ? "Race week" : `${pw.weeksOut} week${pw.weeksOut>1?"s":""} to race`}</span>
+          </div>
+          <div style={{ display:"grid", gap:10 }}>
+            <div>
+              <div style={{ display:"flex", justifyContent:"space-between", fontSize:13, marginBottom:5 }}><span>Running</span><span><b>{pw.doneKm}</b> / {pw.targetKm} km</span></div>
+              <Bar100 pct={pw.doneKm / pw.targetKm} color={BLUE}/>
+            </div>
+            <p style={{ margin:0, fontSize:13 }}>{pw.qualityDone ? "✅" : "⬜️"} Quality: {pw.quality}</p>
+            <p style={{ margin:0, fontSize:13 }}>{pw.longDone ? "✅" : "⬜️"} Long run: {pw.longKm} km{pw.doneLong ? <span style={{ color:MUTED }}> (longest so far {pw.doneLong} km)</span> : null}</p>
+            {pw.note && <p style={{ margin:0, fontSize:12, color:MUTED }}>{pw.note}</p>}
+          </div>
+        </section>
+      )}
+      <section style={{ ...card, marginBottom:14, padding:"16px 0 8px" }}>
+        <p style={{ ...label, padding:"0 18px" }}>Plan to {settings.goal.name}</p>
+        <div style={{ overflowX:"auto" }}>
+          <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12, minWidth:520 }}>
+            <thead><tr style={{ color:MUTED, textAlign:"left" }}>
+              {["Week of","Phase","Quality session","Long run","Target","Done"].map(h => <th key={h} style={{ padding:"6px 10px", fontWeight:600, borderBottom:`1px solid ${SEP}` }}>{h}</th>)}
+            </tr></thead>
+            <tbody>
+              {plan.weeks.map(w => {
+                const current = w === pw, past = w.end <= startOfDay();
+                return (
+                  <tr key={w.key} style={{ background: current ? "#1a2540" : "transparent" }}>
+                    <td style={{ padding:"8px 10px", whiteSpace:"nowrap" }}>{fmtDay(w.key)}</td>
+                    <td style={{ padding:"8px 10px", color:MUTED }}>{w.phase}</td>
+                    <td style={{ padding:"8px 10px" }}>{(past || current) && w.weeksOut ? (w.qualityDone ? "✅ " : past ? "✖️ " : "") : ""}{w.quality}</td>
+                    <td style={{ padding:"8px 10px", whiteSpace:"nowrap" }}>{(past || current) && w.weeksOut ? (w.longDone ? "✅ " : past ? "✖️ " : "") : ""}{w.weeksOut ? `${w.longKm} km` : "Race"}</td>
+                    <td style={{ padding:"8px 10px", whiteSpace:"nowrap", color:MUTED }}>{w.targetKm} km</td>
+                    <td style={{ padding:"8px 10px", whiteSpace:"nowrap", fontVariantNumeric:"tabular-nums" }}>{past || current ? `${w.doneKm} km` : ""}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        {next && <p style={{ margin:"10px 18px 0", fontSize:12, color:MUTED }}>Coming up: {next.text}.</p>}
+      </section>
+    </>)}
+  </>);
+}
+
 function EmptyState({ syncing, error, onSync }) {
   return (
     <div style={{ background:BG, minHeight:"100vh", color:TEXT, fontFamily:"-apple-system, system-ui, sans-serif", display:"flex", alignItems:"center", justifyContent:"center", padding:"24px 16px", boxSizing:"border-box" }}>
@@ -493,6 +682,7 @@ export function Dashboard({ source }) {
   const [showCount, setShowCount] = useState(6);
   const [detail, setDetail]     = useState(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [coachId, setCoachId]   = useState(null);
   const [, setTick]             = useState(0);
   const actsRef = useRef(acts);
   actsRef.current = acts;
@@ -542,6 +732,7 @@ export function Dashboard({ source }) {
   };
 
   const d = useMemo(() => computeDashboard(acts, settings), [acts, settings]);
+  const plan = useCoachPlan(acts, settings, d.long4);
 
   // All hooks run above this line on every render.
   if (!acts.length) return (
@@ -597,7 +788,7 @@ export function Dashboard({ source }) {
             </div>
           </div>
           <nav role="tablist" aria-label="Sections" style={{ display:"flex", gap:4, marginTop:16, borderBottom:`1px solid ${SEP}` }}>
-            {["Overview","Fitness","Running"].map(t => (
+            {["Overview","Coach","Fitness","Running"].map(t => (
               <button key={t} role="tab" aria-selected={tab===t} onClick={()=>setTab(t)}
                 style={{ background:"none", border:"none", cursor:"pointer", padding:"10px 12px", fontSize:13, fontWeight:600, color:tab===t?TEXT:MUTED, borderBottom:tab===t?`2px solid ${ORANGE}`:"2px solid transparent", fontFamily:"inherit" }}>{t}</button>
             ))}
@@ -667,6 +858,23 @@ export function Dashboard({ source }) {
                 </div>
               )}
             </section>
+
+            {/* Latest session → coach */}
+            {acts[0] && (() => {
+              const last = acts[0], lq = quickReview(last, acts, plan);
+              return (
+                <button onClick={()=>{ setCoachId(last.id); setTab("Coach"); }}
+                  style={{ ...card, width:"100%", textAlign:"left", cursor:"pointer", color:TEXT, fontFamily:"inherit", marginBottom:14, display:"flex", alignItems:"center", gap:14 }}>
+                  <span style={{ fontSize:26 }}>🧑‍🏫</span>
+                  <span style={{ flex:1, minWidth:0 }}>
+                    <span style={{ display:"block", fontSize:11, color:MUTED, letterSpacing:"0.08em", textTransform:"uppercase", fontWeight:600, marginBottom:3 }}>Latest session · {fmtDayW(last.date)}</span>
+                    <span style={{ display:"block", fontSize:15, fontWeight:700 }}>{KIND[last.kind].icon} {lq.label} · {fmtDist(last)} · {lq.verdict}</span>
+                    <span style={{ display:"block", fontSize:12, color:MUTED, marginTop:2, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{lq.notes[0]}</span>
+                  </span>
+                  <span style={{ fontSize:12, color:ORANGE, fontWeight:700, flexShrink:0 }}>Coach review →</span>
+                </button>
+              );
+            })()}
 
             {/* This week */}
             <section style={{ ...card, marginBottom:14, display:"flex", gap:18, alignItems:"center" }}>
@@ -942,6 +1150,10 @@ export function Dashboard({ source }) {
               </ResponsiveContainer>
             </section>
           </>)}
+          {tab === "Coach" && (
+            <CoachTab acts={acts} settings={settings} d={d} plan={plan} source={source}
+              selectedId={coachId} setSelectedId={setCoachId} onOpenSettings={()=>setSettingsOpen(true)} onOpenActivity={setDetail}/>
+          )}
         </main>
       </div>
 

@@ -1,7 +1,9 @@
 // Strava training dashboard — Cloudflare Worker.
 // Serves the bundled app from ./public, keeps Strava OAuth tokens, the activity history and settings in KV,
 // and syncs Strava server-side so the browser never sees API credentials.
+import Anthropic from "@anthropic-ai/sdk";
 import { authorize } from "./access.js";
+import { COACH_INSTRUCTIONS, COACH_SCHEMA, isReview } from "../../app/coach.js";
 
 const CSP = [
   "default-src 'self'",
@@ -24,6 +26,8 @@ const SECURITY_HEADERS = {
 const STRAVA_API = "https://www.strava.com/api/v3";
 const SYNC_COOLDOWN_MS = 5 * 60 * 1000; // reuse the KV copy if Strava was checked this recently
 const MAX_ROWS = 2000;
+const COACH_MODEL = "claude-opus-5-5";
+const COACH_DAILY_LIMIT = 40; // AI reviews per day, a guard against runaway spend
 // Starting settings until you save your own (carried over from the original dashboard).
 const DEFAULT_SETTINGS = {
   goal: { name: "Sydney Marathon", date: "2026-08-30", km: 42.195, target: "" },
@@ -139,7 +143,7 @@ async function strava(env, path) {
 
 // ── Activities ────────────────────────────────────────────────────────────────
 // Compact row, same shape the app uses: [id, name, sport_type, start_local, distance_m, moving_time_s,
-// elevation_gain_m, relative_effort, calories, pr_count, avg_cadence]
+// elevation_gain_m, relative_effort, calories, pr_count, avg_cadence, elapsed_time_s]
 function toRow(a) {
   return [
     String(a.id), a.name, a.sport_type || a.type, String(a.start_date_local || "").replace(/Z$/, "").slice(0, 16),
@@ -148,11 +152,13 @@ function toRow(a) {
     a.kilojoules != null ? Math.round(a.kilojoules) : null, // summaries carry no calories; ride kJ ≈ kcal
     a.pr_count ?? a.achievement_count ?? 0,
     a.average_cadence != null ? Math.round(a.average_cadence * 10) / 10 : null,
+    a.elapsed_time ?? null,
   ];
 }
 
 async function syncActivities(env, full) {
   const [rows, sync] = await Promise.all([kvGet(env, "rows", []), kvGet(env, "sync", null)]);
+  if (rows.length && rows[0].length < 12) full = true; // one-time backfill of fields added later (elapsed time)
   if (!full && sync && rows.length && Date.now() - sync.at < SYNC_COOLDOWN_MS) return { rows, syncedAt: sync.at };
 
   // Incremental: everything since 2 days before the newest activity we hold (catches edits);
@@ -188,6 +194,56 @@ function sanitizeSettings(s) {
   return { goal, weeklyRunKm, vo2 };
 }
 
+// ── AI coach ──────────────────────────────────────────────────────────────────
+// The browser sends the session plus a compact training summary (built in app/coach.js);
+// the Worker asks Claude for a structured review and caches it per activity.
+async function coachReview(request, env) {
+  if (!env.ANTHROPIC_API_KEY) throw new ApiError("coach_not_configured", 503, "ANTHROPIC_API_KEY is not set");
+  const body = await request.text();
+  if (body.length > 100000) throw new ApiError("bad_request", 413, "Too large");
+  let input;
+  try { input = JSON.parse(body); } catch { throw new ApiError("bad_request", 400, "Expected JSON"); }
+  const id = String(input.activityId || "");
+  if (!/^\d{1,20}$/.test(id) || !input.context || typeof input.context !== "object") throw new ApiError("bad_request", 400, "activityId and context required");
+
+  const cacheKey = `coach:${id}`;
+  if (!input.refresh) {
+    const cached = await kvGet(env, cacheKey, null);
+    if (cached) return cached;
+  }
+  const day = new Date().toISOString().slice(0, 10);
+  const used = Number(await env.STRAVA.get(`coach-count:${day}`)) || 0;
+  if (used >= COACH_DAILY_LIMIT) throw new ApiError("coach_limit", 429, "Daily coach limit reached");
+  await env.STRAVA.put(`coach-count:${day}`, String(used + 1), { expirationTtl: 2 * 86400 });
+
+  const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
+  let msg;
+  try {
+    msg = await client.beta.messages.create({
+      model: COACH_MODEL,
+      max_tokens: 16000,
+      betas: ["server-side-fallback-2026-07-01"],
+      fallbacks: "default", // on a policy decline, Anthropic re-runs the request on its recommended fallback model
+      output_config: { effort: "medium", format: { type: "json_schema", schema: COACH_SCHEMA } },
+      system: COACH_INSTRUCTIONS,
+      messages: [{ role: "user", content: `Review this session. Training data (JSON):\n${JSON.stringify(input.context)}` }],
+    });
+  } catch (e) {
+    if (e instanceof Anthropic.AuthenticationError) throw new ApiError("coach_not_configured", 503, "The Anthropic API key was rejected");
+    if (e instanceof Anthropic.RateLimitError) throw new ApiError("coach_busy", 429, "The coach is busy. Try again in a minute");
+    if (e instanceof Anthropic.APIError) { console.error("coach", e.status, e.message); throw new ApiError("coach_error", 502, "The coach couldn't respond"); }
+    throw e;
+  }
+  if (msg.stop_reason === "refusal") throw new ApiError("coach_error", 502, "The coach declined to review this session");
+  const text = msg.content.filter(b => b.type === "text").map(b => b.text).join("");
+  let review;
+  try { review = JSON.parse(text); } catch { review = null; }
+  if (!isReview(review)) throw new ApiError("coach_error", 502, "The coach's reply was incomplete. Try again");
+  const out = { review, model: msg.model, createdAt: Date.now() };
+  await env.STRAVA.put(cacheKey, JSON.stringify(out), { expirationTtl: 180 * 86400 });
+  return out;
+}
+
 // ── API ───────────────────────────────────────────────────────────────────────
 async function handleApi(request, env, url) {
   const route = `${request.method} ${url.pathname}`;
@@ -205,6 +261,7 @@ async function handleApi(request, env, url) {
     await env.STRAVA.put("settings", JSON.stringify(settings));
     return json({ settings });
   }
+  if (route === "POST /api/coach") return json(await coachReview(request, env));
   if (route === "POST /api/disconnect") {
     await Promise.all(["token", "rows", "sync", "athlete"].map(k => env.STRAVA.delete(k)));
     return json({ ok: true });
