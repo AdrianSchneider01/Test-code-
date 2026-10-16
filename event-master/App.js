@@ -10,6 +10,7 @@ import { StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { Background } from './src/components/Brand';
+import { BudgetAlert } from './src/components/BudgetAlert';
 import { BottomNav, SHELL_ROUTES, Sidebar } from './src/components/NavBar';
 import { ToastProvider } from './src/components/ui';
 import { EditEventScreen, EventScreen, EventsScreen, HomeScreen, ProfileScreen, ReviewChangesScreen, SavedIdeasScreen } from './src/screens/Account';
@@ -94,6 +95,7 @@ export default function App() {
             <NavigationProvider>
               <ToastProvider>
                 <Router />
+                <BudgetAlert />
               </ToastProvider>
             </NavigationProvider>
           </AppStateProvider>

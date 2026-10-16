@@ -26,6 +26,7 @@ npm run lint
 - Explore Mode: ideas, browsing products, what Event Master can plan, an interactive demo of how it works, and an example party. Nothing in Explore creates a real event.
 - Creating an event: what you're planning, then the essentials (venue, date, guests, budget, vibe), then which categories you want help with, then your Party Plan.
 - One suggestion at a time, with Accept or Decline, a live budget, and a "Your party is ready!" screen with Save my party.
+- **Budget alerts:** if any change takes a party exactly to its budget, or over it, a pop-up says so straight away and offers Undo that change, Review my plan, or Keep it.
 - Home screen for returning users, an Events list, an individual event page, Profile and Saved Ideas.
 
 **Build Phase 2: smart planning**

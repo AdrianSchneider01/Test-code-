@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
 import { checkAI } from '../ai/client';
+import { findBudgetAlert } from '../logic/engine';
 import { DEFAULT_MEMORY, effectiveMemories, profileFromMemories } from '../logic/memory';
 import { uid } from '../logic/util';
 
@@ -20,6 +21,17 @@ export function AppStateProvider({ children }) {
   const [hydrated, setHydrated] = useState(false);
   const [aiAvailable, setAiAvailable] = useState(false);
   const saveTimer = useRef(null);
+
+  // Budget alerts: whenever the events change (from any screen), check whether
+  // a plan just reached or went over its budget. Done during render (React's
+  // "adjust state when data changes" pattern) so no change can slip past.
+  const [seenEvents, setSeenEvents] = useState(data.events);
+  const [budgetAlert, setBudgetAlert] = useState(null);
+  if (seenEvents !== data.events) {
+    const alert = hydrated ? findBudgetAlert(seenEvents, data.events) : null;
+    setSeenEvents(data.events);
+    if (alert) setBudgetAlert(alert);
+  }
 
   useEffect(() => {
     let alive = true;
@@ -87,12 +99,18 @@ export function AppStateProvider({ children }) {
             savedIdeas: exists ? s.savedIdeas.filter((x) => !(x.kind === kind && x.refId === refId)) : [...s.savedIdeas, entry],
           };
         }),
+      dismissBudgetAlert: () => setBudgetAlert(null),
+      // Undo: put the event back exactly as it was before the change.
+      restoreEvent: (previous) => setData((s) => ({ ...s, events: s.events.map((e) => (e.id === previous.id ? previous : e)) })),
       setSettings: (patch) => setData((s) => ({ ...s, settings: { ...s.settings, ...patch } })),
     }),
     [setDraft],
   );
 
-  const value = useMemo(() => ({ ...data, draft, hydrated, aiAvailable, ...actions }), [data, draft, hydrated, aiAvailable, actions]);
+  const value = useMemo(
+    () => ({ ...data, draft, hydrated, aiAvailable, budgetAlert, ...actions }),
+    [data, draft, hydrated, aiAvailable, budgetAlert, actions],
+  );
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;
 }
 

@@ -54,14 +54,14 @@ export function BudgetBar({ event, compact }) {
         <>
           <View style={styles.track}>
             <LinearGradient
-              colors={b.over ? [colors.danger, colors.danger] : [colors.purple, colors.pink]}
+              colors={b.over ? [colors.danger, colors.danger] : b.remaining === 0 ? [colors.warning, colors.warning] : [colors.purple, colors.pink]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={{ width: `${Math.max(2, b.ratio * 100)}%`, height: '100%', borderRadius: 4 }}
             />
           </View>
-          <T variant="small" color={b.over ? colors.danger : colors.textMuted}>
-            {b.over ? `Over budget by ${money(-b.remaining)}` : `${money(b.remaining)} remaining`}
+          <T variant="small" color={b.over ? colors.danger : b.remaining === 0 ? colors.warning : colors.textMuted}>
+            {b.over ? `⚠️ Over budget by ${money(-b.remaining)}` : b.remaining === 0 ? '🎯 You’ve reached your budget' : `${money(b.remaining)} remaining`}
           </T>
         </>
       ) : (

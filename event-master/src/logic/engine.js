@@ -550,3 +550,48 @@ export function applyEdit(event, patch) {
   next.skipped = (next.skipped || []).filter((k) => cats.includes(k.split('/')[0]));
   return next;
 }
+
+// ── Budget alerts ───────────────────────────────────────────────────────────
+// Detects a change that takes a plan up to ("hit") or over its budget. Only
+// fires when the budget itself didn't change (budget edits are covered by the
+// "Your party has changed" review) and the total actually went up.
+export function budgetCrossing(before, after) {
+  const b = budgetSummary(before);
+  const a = budgetSummary(after);
+  if (a.budget == null || before.budget !== after.budget || a.total <= b.total) return null;
+  if (a.total > a.budget && b.total <= b.budget) return { type: 'over', total: a.total, budget: a.budget, overBy: round2(a.total - a.budget) };
+  if (a.total === a.budget && b.total < b.budget) return { type: 'hit', total: a.total, budget: a.budget, overBy: 0 };
+  return null;
+}
+
+// What pushed the total up: a newly added item, or the item whose total grew most.
+export function budgetCause(before, after) {
+  const prev = {};
+  before.items.forEach((i) => {
+    prev[i.id] = itemTotal(i);
+  });
+  let cause = null;
+  let biggest = 0;
+  after.items.forEach((i) => {
+    const grew = itemTotal(i) - (prev[i.id] || 0);
+    if (grew > biggest) {
+      biggest = grew;
+      cause = i;
+    }
+  });
+  return cause;
+}
+
+// Compares two versions of the event list and returns the first budget alert.
+export function findBudgetAlert(prevEvents, nextEvents) {
+  for (const next of nextEvents) {
+    const prev = prevEvents.find((e) => e.id === next.id);
+    if (!prev || prev === next) continue;
+    const crossing = budgetCrossing(prev, next);
+    if (crossing) {
+      const cause = budgetCause(prev, next);
+      return { ...crossing, eventId: next.id, eventName: next.name, causeName: cause ? cause.name : null, previous: prev };
+    }
+  }
+  return null;
+}

@@ -6,13 +6,16 @@ import {
   applyDecline,
   applyEdit,
   applyOwnItem,
+  applyQty,
   applyRemove,
   applyReplace,
   applySkip,
+  budgetCrossing,
   budgetSummary,
   categoryProgress,
   changesNeedReview,
   computeQty,
+  findBudgetAlert,
   coloursCompatible,
   interpretNote,
   isPlanComplete,
@@ -314,5 +317,63 @@ describe('events', () => {
     expect(ev.budget).toBe(300);
     expect(ev.items).toEqual([]);
     expect(ev.status).toBe('planning');
+  });
+});
+
+describe('budget alerts', () => {
+  let n = 0;
+  const withItem = (ev, price) => ({
+    ...ev,
+    items: [...ev.items, { id: `i${++n}`, productId: null, custom: true, category: 'decorations', slot: 'balloons', name: `Item ${price}`, unitPrice: price, qty: 1 }],
+  });
+
+  test('alerts when the total reaches the budget exactly', () => {
+    const before = withItem(makeEvent({ budget: 50 }), 30);
+    const after = withItem(before, 20);
+    expect(budgetCrossing(before, after)).toEqual({ type: 'hit', total: 50, budget: 50, overBy: 0 });
+  });
+
+  test('alerts when the total goes over the budget', () => {
+    const before = withItem(makeEvent({ budget: 50 }), 30);
+    const after = withItem(before, 25);
+    expect(budgetCrossing(before, after)).toEqual({ type: 'over', total: 55, budget: 50, overBy: 5 });
+  });
+
+  test('going from exactly at budget to over still alerts', () => {
+    const before = withItem(makeEvent({ budget: 50 }), 50);
+    expect(budgetCrossing(before, withItem(before, 1)).type).toBe('over');
+  });
+
+  test('no alert while under, when already over, when the total drops, or with no budget', () => {
+    const base = makeEvent({ budget: 50 });
+    expect(budgetCrossing(base, withItem(base, 10))).toBeNull();
+    const over = withItem(base, 60);
+    expect(budgetCrossing(over, withItem(over, 5))).toBeNull();
+    expect(budgetCrossing(over, base)).toBeNull();
+    const noBudget = makeEvent({ budget: null });
+    expect(budgetCrossing(noBudget, withItem(noBudget, 500))).toBeNull();
+  });
+
+  test('budget edits are left to the review screen', () => {
+    const before = withItem(makeEvent({ budget: 100 }), 80);
+    expect(budgetCrossing(before, { ...before, budget: 50 })).toBeNull();
+  });
+
+  test('quantity increases count too, and the alert names the cause', () => {
+    let ev = makeEvent({ budget: 20, guests: 10 });
+    ev = applyAccept(ev, suggestNext(ev, 'decorations', 'balloons', ctx).suggestion); // $5
+    const id = ev.items[0].id;
+    const after = applyQty(ev, id, 5); // $25
+    const alert = findBudgetAlert([ev], [after]);
+    expect(alert.type).toBe('over');
+    expect(alert.overBy).toBe(5);
+    expect(alert.causeName).toBe('Pink Balloon Set');
+    expect(alert.previous).toBe(ev);
+  });
+
+  test('new or unchanged events never alert', () => {
+    const ev = withItem(makeEvent({ budget: 10 }), 50);
+    expect(findBudgetAlert([], [ev])).toBeNull();
+    expect(findBudgetAlert([ev], [ev])).toBeNull();
   });
 });
