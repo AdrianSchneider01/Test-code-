@@ -18,6 +18,7 @@ import {
   venueText,
 } from '../components/Plan';
 import { Screen } from '../components/Screen';
+import { useSaveParty } from '../components/useSaveParty';
 import { Button, Card, Chip, Field, Gap, Grid, OptionRow, SectionTitle, Sheet, StatusPill, Stepper, T, Tag, nativeDriver, useToast } from '../components/ui';
 import { capitalise, getCategory, getSlot } from '../data/categories';
 import { getProduct } from '../data/catalog';
@@ -749,7 +750,7 @@ export function OwnItemScreen() {
 export function ReadyScreen() {
   const nav = useNav();
   const event = useEvent(nav.route.params.eventId);
-  const { saveParty } = useAppState();
+  const saveParty = useSaveParty();
   const { sideBySide, isPhone } = useLayout();
   const [savedSheet, setSavedSheet] = useState(false);
   if (!event) return <MissingEvent />;
@@ -771,7 +772,7 @@ export function ReadyScreen() {
                   title="Save my party"
                   icon="🗂️"
                   onPress={() => {
-                    saveParty(event.id);
+                    saveParty(event);
                     setSavedSheet(true);
                   }}
                   style={isPhone ? undefined : { flex: 1.4 }}

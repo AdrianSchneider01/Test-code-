@@ -55,12 +55,15 @@ export function observationsFromEvent(event) {
   const uniq = (arr) => arr.filter((v, i) => v && arr.indexOf(v) === i);
   const cakeItem = event.items.find((i) => i.category === 'cake' && i.slot === 'cake' && i.productId);
   const cakeProduct = cakeItem ? getProduct(cakeItem.productId) : null;
+  // AI's review of the saved party (if any) adds what the choices alone don't
+  // show: requests, feedback and notes. It still only counts once per event.
+  const ai = event.aiInsights || { colours: [], styles: [], vibes: [], shopsLiked: [], shopsAvoided: [] };
   return {
-    colour: uniq(products.map((p) => p.colour).filter((c) => !NEUTRAL.includes(c))),
-    style: uniq(products.map((p) => p.style)),
-    vibe: uniq((event.vibes || []).filter((v) => v !== 'other')),
-    shopLike: uniq(products.map((p) => p.retailer)),
-    shopAvoid: eventAvoidedShops(event),
+    colour: uniq([...products.map((p) => p.colour), ...ai.colours].filter((c) => !NEUTRAL.includes(c))),
+    style: uniq([...products.map((p) => p.style), ...ai.styles]),
+    vibe: uniq([...(event.vibes || []).filter((v) => v !== 'other'), ...ai.vibes]),
+    shopLike: uniq([...products.map((p) => p.retailer), ...ai.shopsLiked]),
+    shopAvoid: uniq([...eventAvoidedShops(event), ...ai.shopsAvoided]),
     eventType: event.type && event.type !== 'other' ? [event.type] : [],
     cake: cakeProduct && cakeProduct.subtype ? [cakeProduct.subtype] : [],
   };
@@ -181,6 +184,8 @@ export function clearAllMemory(memory, nowISO) {
 export function eventLearnings(event) {
   const obs = observationsFromEvent(event);
   const lines = [];
+  if (event.aiInsights && event.aiInsights.summary) lines.push(`✨ ${event.aiInsights.summary}`);
+  if (event.aiInsights) event.aiInsights.notes.forEach((n) => lines.push(`✨ ${n}`));
   if (obs.colour.length) lines.push(`🎨 Colours you chose: ${obs.colour.join(', ')}`);
   if (obs.style.length) lines.push(`✨ Styles you accepted: ${obs.style.join(', ')}`);
   if (obs.vibe.length) lines.push(`🎉 Vibe: ${obs.vibe.map(vibeLabel).join(', ')}`);

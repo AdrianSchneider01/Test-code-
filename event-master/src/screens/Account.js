@@ -6,6 +6,7 @@ import { CategoryPicker, EssentialsFields, TypePicker, essentialsMissing, toggle
 import { EventSummary, ItemRow, ProductVisual } from '../components/Plan';
 import { Screen } from '../components/Screen';
 import { Button, Card, Chip, Field, Gap, Grid, OptionRow, SectionTitle, Sheet, T, Tag, useToast } from '../components/ui';
+import { useSaveParty } from '../components/useSaveParty';
 import { useStartParty } from '../components/useStartParty';
 import { eventTypeOf, getCategory } from '../data/categories';
 import { getProduct } from '../data/catalog';
@@ -214,7 +215,8 @@ export function EventsScreen() {
 export function EventScreen() {
   const nav = useNav();
   const event = useEvent(nav.route.params.eventId);
-  const { saveParty, deleteEvent } = useAppState();
+  const { deleteEvent } = useAppState();
+  const saveParty = useSaveParty();
   const toast = useToast();
   const { columns } = useLayout();
   const [open, setOpen] = useState({});
@@ -255,7 +257,7 @@ export function EventScreen() {
                 title="Save my party"
                 size="sm"
                 onPress={() => {
-                  saveParty(event.id);
+                  saveParty(event);
                   toast('✨ Your party has been saved!');
                 }}
               />

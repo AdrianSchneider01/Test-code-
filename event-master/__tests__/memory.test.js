@@ -115,3 +115,28 @@ describe('memory patterns', () => {
     expect(lines).toMatch(/Too expensive/);
   });
 });
+
+describe('AI party reviews feed memory patterns', () => {
+  const insights = (o) => ({ colours: [], styles: [], vibes: [], shopsLiked: [], shopsAvoided: [], notes: [], summary: '', ...o });
+
+  test('AI findings count, but still need 2+ saved parties', () => {
+    const a = { ...savedEvent('a', []), aiInsights: insights({ vibes: ['elegant'], colours: ['gold'] }) };
+    expect(learnedMemories([a], mem).find((m) => m.key === 'vibe:elegant')).toBeUndefined();
+    const b = { ...savedEvent('b', []), aiInsights: insights({ vibes: ['elegant'] }) };
+    expect(learnedMemories([a, b], mem).find((m) => m.key === 'vibe:elegant').count).toBe(2);
+    expect(learnedMemories([a, b], mem).find((m) => m.key === 'colour:gold')).toBeUndefined();
+  });
+
+  test('a choice and an AI finding in the same party count once', () => {
+    const a = { ...savedEvent('a', ['bal-gold-confetti']), aiInsights: insights({ colours: ['gold'] }) };
+    const b = savedEvent('b', ['ban-gold-letters']);
+    expect(learnedMemories([a, b], mem).find((m) => m.key === 'colour:gold').count).toBe(2);
+  });
+
+  test('"What I learned" shows the AI summary and notes first', () => {
+    const ev = { ...savedEvent('a', ['bal-purple-chrome']), aiInsights: insights({ summary: 'A glam purple night.', notes: ['Likes a statement balloon'] }) };
+    const lines = eventLearnings(ev);
+    expect(lines[0]).toBe('✨ A glam purple night.');
+    expect(lines[1]).toBe('✨ Likes a statement balloon');
+  });
+});

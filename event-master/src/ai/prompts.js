@@ -51,6 +51,26 @@ Weigh what the app knows, in this order of importance:
 - choiceId: the exact "id" of your chosen candidate.
 - reason: one short, warm sentence addressed to "you" saying why it fits, based only on facts given (e.g. "It's the elegant gold look you asked for and pairs with your star garland"). Don't mention prices unless it's about value or budget.`,
 
+  learn: `${SHARED}
+
+Task: the user just saved a finished party plan. Read what happened and record what it shows about their taste, so the app can spot patterns across their parties.
+"accepted" are items they chose, "declined" are items they turned down (with their reason and any feedback), "requests" are things they asked for while planning, "ownItems" are things they already had (with their notes).
+- colours / styles / vibes: what they clearly leaned towards in this party. Count what they asked for and chose, not what they turned down.
+- shopsLiked / shopsAvoided: only shops they clearly favoured or clearly rejected.
+- notes: up to 3 short planning habits that clearly show here (e.g. "Prefers to make their own cake"). Leave empty when nothing stands out.
+- summary: one warm sentence addressed to "you" about this party's style.
+Only record what the data supports. One party is not a habit: describe this party, and leave judging patterns to the app.`,
+
+  budgetHelp: `${SHARED}
+
+Task: the user's party plan is over budget. "items" lists what's in the plan with each line total; "overBy" is how much they need to save.
+Suggest up to 4 changes that together would get them back under budget while keeping the party's feel, favouring the biggest savings that matter least to the vibe.
+- itemId: the exact "id" of an item from "items".
+- action: "swap" (find a cheaper version of the same thing) or "remove" (drop it).
+- why: one short sentence for the user, e.g. "Your biggest decoration cost; a simpler backdrop keeps the look".
+- summary: one short sentence on the overall approach.
+Don't invent prices or products; only refer to the items given.`,
+
   profileSummary: `${SHARED}
 
 Task: "memories" lists what Event Master has learned about the user. Write "summary": two short, friendly sentences describing their party style, addressed to the user as "you". Only use what is in the list.`,

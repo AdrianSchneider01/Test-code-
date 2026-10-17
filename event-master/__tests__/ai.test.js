@@ -47,6 +47,8 @@ describe('AI contract', () => {
       profileSummary: { memories: ['You’ve chosen purple for 3 events'] },
       explain: { product, reasons: ['Matches your Cute vibe'], event },
       ideas: { event },
+      learn: { event, accepted: ['Pink Balloon Set · pink · cute'], declined: [], requests: [], ownItems: [], vibeUnderstanding: '' },
+      budgetHelp: { event, budget: 100, total: 120, overBy: 20, items: [{ id: 'i1', name: 'Arch', category: 'Decorations', lineTotal: 28, qty: 1 }] },
       pick: {
         event,
         context: { lookingFor: 'Decorations — Balloons', accepted: [], declined: [], requests: [], profile: [], savedIdeas: [], partyIdeas: [], remainingBudget: 150 },
@@ -186,5 +188,64 @@ describe('single-prompt form (claude.ai sample capability)', () => {
     expect(prompt).toContain(JSON.stringify(TASKS.feedback.schema));
     expect(prompt).toContain(JSON.stringify(input));
     Object.keys(TASKS).forEach((t) => expect(PROMPTS[t]).toBeTruthy());
+  });
+});
+
+describe('AI party review (learn) and budget help', () => {
+  // eslint-disable-next-line import/first
+  const { buildBudgetHelpInput, buildLearnInput } = require('../src/ai/assist');
+  // eslint-disable-next-line import/first
+  const { applyOwnItem, applyAccept: accept } = require('../src/logic/engine');
+
+  const planned = () => {
+    let ev = { ...base(), name: 'Secret Name', venue: { mode: 'own', name: 'Secret Venue' }, budget: 20 };
+    ev = accept(ev, suggestNext(ev, 'decorations', 'balloons', ctx).suggestion);
+    ev = applyDecline(ev, suggestNext(ev, 'decorations', 'banner', ctx).suggestion, 'other', 'too loud', {
+      reasons: ['colour'], avoidColours: [], preferColours: [], preferStyles: [], preferVibes: [], summary: 'Softer colours',
+    });
+    ev = applyRefinement(ev, 'more elegant', { preferVibes: ['elegant'], preferColours: [], avoidColours: [], preferStyles: [], avoidStyles: [], maxPrice: null, summary: 'More elegant' });
+    ev = applyOwnItem(ev, { categoryId: 'decorations', slotId: 'table', name: 'Nana’s tablecloth', price: '30', qty: '1', notes: 'family heirloom' });
+    return ev;
+  };
+
+  test('learn input covers choices, feedback, requests and own items, with no names or venues', () => {
+    const input = buildLearnInput(planned());
+    expect(validateInput('learn', input)).toBe(true);
+    expect(input.accepted[0]).toMatch(/Pink Balloon Set/);
+    expect(input.declined[0]).toMatch(/Softer colours/);
+    expect(input.requests).toEqual(['more elegant (More elegant)']);
+    expect(input.ownItems).toEqual(['Nana’s tablecloth — family heirloom']);
+    expect(JSON.stringify(input)).not.toMatch(/Secret Name|Secret Venue/);
+  });
+
+  test('learn output is limited to known values', () => {
+    const out = sanitizeOutput('learn', {
+      colours: ['Gold', 'neon'], styles: ['luxe'], vibes: ['elegant', 'spooky'], shopsLiked: ['Glow & Co', 'Amazon'],
+      shopsAvoided: [], notes: ['Likes to make their own decorations', '', 'x'.repeat(300)], summary: 'An elegant, golden party.',
+    });
+    expect(out.colours).toEqual(['gold']);
+    expect(out.vibes).toEqual(['elegant']);
+    expect(out.shopsLiked).toEqual(['Glow & Co']);
+    expect(out.notes).toHaveLength(2);
+    expect(out.notes[1].length).toBeLessThanOrEqual(100);
+  });
+
+  test('budget help only appears when over budget and only refers to real items', () => {
+    const ev = planned();
+    const input = buildBudgetHelpInput(ev);
+    expect(validateInput('budgetHelp', input)).toBe(true);
+    expect(input.overBy).toBeGreaterThan(0);
+    expect(input.items[0].name).toBe('Nana’s tablecloth'); // biggest cost first
+    const realId = input.items[0].id;
+    const out = sanitizeOutput('budgetHelp', {
+      suggestions: [
+        { itemId: realId, action: 'remove', why: 'Biggest cost' },
+        { itemId: realId, action: 'swap', why: 'duplicate' },
+        { itemId: 'invented', action: 'swap', why: 'not real' },
+      ],
+      summary: 'Trim the biggest cost.',
+    }, input);
+    expect(out.suggestions).toEqual([{ itemId: realId, action: 'remove', why: 'Biggest cost' }]);
+    expect(buildBudgetHelpInput({ ...ev, budget: 1000 })).toBeNull();
   });
 });

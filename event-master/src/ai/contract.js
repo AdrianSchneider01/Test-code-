@@ -55,6 +55,26 @@ export const TASKS = {
   },
   // A short, friendly summary of the user's memory profile.
   profileSummary: { schema: obj({ summary: str }) },
+  // Review a saved party: what it says about the person's taste. Feeds the
+  // memory patterns (which still need 2+ saved events to become memories).
+  learn: {
+    schema: obj({
+      colours: enumList(COLOURS),
+      styles: enumList(STYLES),
+      vibes: enumList(VIBE_IDS),
+      shopsLiked: enumList(SHOPS),
+      shopsAvoided: enumList(SHOPS),
+      notes: { type: 'array', items: str },
+      summary: str,
+    }),
+  },
+  // Over budget: which items in the plan to swap or remove.
+  budgetHelp: {
+    schema: obj({
+      suggestions: { type: 'array', items: obj({ itemId: str, action: { type: 'string', enum: ['swap', 'remove'] }, why: str }) },
+      summary: str,
+    }),
+  },
   // Choose the best-fitting product from candidates the app has already
   // filtered, using everything known about the party and the user.
   pick: { schema: obj({ choiceId: str, reason: str }) },
@@ -156,6 +176,29 @@ export function sanitizeOutput(task, raw, input) {
         });
       return { memories: memories.slice(0, 12) };
     }
+    case 'learn':
+      return {
+        colours: pick(r.colours, COLOURS),
+        styles: pick(r.styles, STYLES),
+        vibes: pick(r.vibes, VIBE_IDS),
+        shopsLiked: pick(r.shopsLiked, SHOPS),
+        shopsAvoided: pick(r.shopsAvoided, SHOPS),
+        notes: (Array.isArray(r.notes) ? r.notes : []).map((n) => text(n, 100)).filter(Boolean).slice(0, 3),
+        summary: text(r.summary, 200),
+      };
+    case 'budgetHelp': {
+      const ids = input && Array.isArray(input.items) ? input.items.map((i) => i.id) : [];
+      const seen = [];
+      const suggestions = (Array.isArray(r.suggestions) ? r.suggestions : [])
+        .map((x) => ({
+          itemId: x && typeof x.itemId === 'string' ? x.itemId : '',
+          action: x && x.action === 'remove' ? 'remove' : 'swap',
+          why: text(x && x.why, 140),
+        }))
+        .filter((x) => ids.includes(x.itemId) && !seen.includes(x.itemId) && seen.push(x.itemId))
+        .slice(0, 4);
+      return { suggestions, summary: text(r.summary, 160) };
+    }
     case 'pick': {
       const ids = input && Array.isArray(input.candidates) ? input.candidates.map((c) => c.id) : null;
       const choiceId = typeof r.choiceId === 'string' ? r.choiceId.trim() : '';
@@ -252,6 +295,25 @@ export function validateInput(task, input) {
       return isText(input.text, 1200);
     case 'profileSummary':
       return isStrList(input.memories, 40) && input.memories.length > 0;
+    case 'learn':
+      return (
+        isEventInfo(input.event) &&
+        isOptStrList(input.accepted, 40) &&
+        isOptStrList(input.declined, 40) &&
+        isOptStrList(input.requests, 15) &&
+        isOptStrList(input.ownItems, 20) &&
+        isOptText(input.vibeUnderstanding, 200)
+      );
+    case 'budgetHelp':
+      return (
+        isEventInfo(input.event) &&
+        isOptNum(input.budget) &&
+        isOptNum(input.total) &&
+        Array.isArray(input.items) &&
+        input.items.length >= 1 &&
+        input.items.length <= 40 &&
+        input.items.every((i) => isObj(i) && isText(i.id, 60) && isText(i.name, 120) && isOptText(i.category, 60) && isOptNum(i.lineTotal) && isOptNum(i.qty))
+      );
     case 'pick':
       return (
         isEventInfo(input.event) &&
