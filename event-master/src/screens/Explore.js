@@ -144,11 +144,11 @@ export function ProductSheet({ product, onClose }) {
           <Tag>{slot ? slot.name : ''}</Tag>
           <Tag>🏪 {product.retailer}</Tag>
           <Tag color={colors.warning} bg="rgba(251,191,36,0.1)">
-            Sample product
+            Example item
           </Tag>
         </View>
         <View style={{ marginTop: 10 }}>
-          <ViewProductLink url={product.url} />
+          <ViewProductLink url={product.url} productId={product.id} />
         </View>
         <View style={{ flexDirection: 'row', gap: 12, marginTop: 12 }}>
           <SaveIdeaButton kind="product" refId={product.id} />

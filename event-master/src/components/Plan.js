@@ -3,6 +3,7 @@ import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from 'r
 
 import { COLOUR_SWATCH, capitalise, eventTypeOf, getCategory, getSlot, vibeLabel } from '../data/categories';
 import { getProduct } from '../data/catalog';
+import { shopLinks } from '../data/shops';
 import { budgetSummary, categoryProgress, categoryTotal, itemTotal, venueCost } from '../logic/engine';
 import { formatDate, money } from '../logic/util';
 import { colors, fonts, radius } from '../theme';
@@ -28,15 +29,49 @@ export function openLink(url) {
   if (url) Linking.openURL(url).catch(() => {});
 }
 
-export function ViewProductLink({ url }) {
-  if (!url) {
+// A direct link when the item has one (e.g. your own item), otherwise search
+// links to real Australian shops that sell this kind of thing.
+export function ViewProductLink({ url, productId, compact }) {
+  if (url) {
+    return <Button variant="tertiary" title="View product ↗" onPress={() => openLink(url)} size="md" style={{ alignSelf: 'flex-start', paddingHorizontal: 0 }} />;
+  }
+  const shops = productId ? shopLinks(getProduct(productId)) : [];
+  if (!shops.length) return null;
+  if (compact) {
     return (
-      <T variant="tiny" dim>
-        Product link coming soon
-      </T>
+      <View style={styles.shopRow}>
+        <T variant="tiny" dim>
+          🔎 Find it:
+        </T>
+        {shops.map((s) => (
+          <Pressable key={s.id} onPress={() => openLink(s.url)} accessibilityRole="link" accessibilityLabel={`Search ${s.name}`} hitSlop={8}>
+            <T variant="tiny" color={colors.pink} style={{ fontFamily: fonts.bold }}>
+              {s.name} ↗
+            </T>
+          </Pressable>
+        ))}
+      </View>
     );
   }
-  return <Button variant="tertiary" title="View product ↗" onPress={() => openLink(url)} size="md" style={{ alignSelf: 'flex-start', paddingHorizontal: 0 }} />;
+  return (
+    <View style={{ marginTop: 14, alignSelf: 'stretch' }}>
+      <T variant="label" dim style={{ marginBottom: 8 }}>
+        🔎 Find it in real shops
+      </T>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+        {shops.map((s) => (
+          <Pressable key={s.id} onPress={() => openLink(s.url)} accessibilityRole="link" accessibilityLabel={`Search ${s.name}`} style={styles.shopBtn}>
+            <T variant="small" style={{ fontFamily: fonts.bold }}>
+              {s.name} ↗
+            </T>
+          </Pressable>
+        ))}
+      </View>
+      <T variant="tiny" dim style={{ marginTop: 6 }}>
+        Opens the shop’s search. Prices here are estimates — the shop shows the real price.
+      </T>
+    </View>
+  );
 }
 
 export function BudgetBar({ event, compact }) {
@@ -103,10 +138,10 @@ export function SuggestionCard({ suggestion, onSave, saved, onExplain, explainin
         <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
           <Tag>{slot ? slot.name : 'Party item'}</Tag>
           <Tag>🏪 {p.retailer}</Tag>
-          {p.sample ? <Tag color={colors.warning} bg="rgba(251,191,36,0.1)">Sample product</Tag> : null}
+          {p.sample ? <Tag color={colors.warning} bg="rgba(251,191,36,0.1)">Example item</Tag> : null}
         </View>
-        <ViewProductLink url={p.url} />
       </View>
+      <ViewProductLink url={p.url} productId={p.id} />
       <View style={styles.why}>
         <T variant="label" color={colors.purple} style={{ marginBottom: 6 }}>
           ✦ Why this was suggested
@@ -154,7 +189,7 @@ export function ItemRow({ item, onPress, showLink = true }) {
           {item.packLabel ? ` × ${item.packLabel}` : ''} · {money(item.unitPrice)} each
           {item.retailer ? ` · ${item.retailer}` : item.custom ? ' · Your own item' : ''}
         </T>
-        {showLink ? <ViewProductLink url={item.url} /> : null}
+        {showLink ? <ViewProductLink url={item.url} productId={item.productId} compact /> : null}
       </View>
       <T variant="bodyBold" style={{ marginLeft: 8 }}>
         {money(itemTotal(item))}
@@ -296,6 +331,8 @@ export function BudgetBreakdown({ event }) {
 }
 
 const styles = StyleSheet.create({
+  shopRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 10, rowGap: 4, marginTop: 4 },
+  shopBtn: { minHeight: 40, paddingHorizontal: 14, justifyContent: 'center', borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, backgroundColor: 'rgba(124,58,237,0.12)' },
   rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   track: { height: 8, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.08)', marginTop: 10, marginBottom: 8, overflow: 'hidden' },
   priceBox: { alignItems: 'center', marginVertical: 16, paddingVertical: 12, borderRadius: radius.md, backgroundColor: 'rgba(8,13,36,0.6)' },

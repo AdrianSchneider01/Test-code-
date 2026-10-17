@@ -2,8 +2,9 @@
 //
 // These are placeholder products so the full planning experience works end to
 // end. Shop names are fictional and prices are illustrative. `url` is null on
-// purpose: real product links, images and prices arrive in Build Phase 4 and
-// must come from a reliable structured source — never invented.
+// purpose: exact product links, images and prices must come from a reliable
+// structured source — never invented. Until then the app links each item to
+// real shops' search pages (see shops.js).
 //
 // qty rule:
 //   { type: 'fixed', n }        → always n units

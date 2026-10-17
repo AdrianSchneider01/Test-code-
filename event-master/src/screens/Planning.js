@@ -647,14 +647,14 @@ export function ItemScreen() {
                   <Tag>🏪 {product.retailer}</Tag>
                   {product.sample ? (
                     <Tag color={colors.warning} bg="rgba(251,191,36,0.1)">
-                      Sample product
+                      Example item
                     </Tag>
                   ) : null}
                 </View>
               </>
             ) : null}
             {item.notes ? <T muted>📝 {item.notes}</T> : null}
-            <ViewProductLink url={item.url} />
+            <ViewProductLink url={item.url} productId={item.productId} />
           </View>
         </Card>
         <View style={[styles.actions, { marginTop: 20 }]}>

@@ -112,7 +112,7 @@ npx wrangler deploy
 
 | Spec item | Why it's not built | What's needed |
 |---|---|---|
-| Phase 4: real products, images, prices and links | The spec says product facts must come from reliable structured sources, so none were invented | Which shops or product feeds to use |
+| Phase 4: exact real products, photos and live prices | The spec says product facts must come from reliable structured sources. Suggestions are example items whose real-shop buttons search Kmart, BIG W, Officeworks, Woolworths, Amazon AU, eBay AU or Etsy | A product feed or shop API (e.g. an affiliate programme) |
 | Phase 5: searching real venues and live availability | Needs a venue or availability service. The venue planner covers everything else | Which venue service to use |
 | Supabase (accounts, security rules) | Needs a Supabase project. Sync currently works only on claude.ai | A Supabase project URL and key |
 
@@ -125,6 +125,7 @@ src/logic/memory.js        pattern-based long-term memory (unit tested)
 src/logic/events.js        event creation and the example party
 src/data/catalog.js        SAMPLE product catalogue, ~170 items (fictional shops, no links)
 src/data/venues.js         kinds of venue, booking statuses, venue ranking
+src/data/shops.js          real Australian shops and their search links (unit tested)
 src/data/categories.js     categories, the parts of each category, vibes, event types
 src/state/AppState.js      app state, saved on the device with AsyncStorage
 src/state/sync.js          claude.ai cloud sync: merge rules (unit tested) and the db connection
