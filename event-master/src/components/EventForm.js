@@ -46,7 +46,7 @@ export function VenueFields({ venue, onChange }) {
         <View style={{ marginTop: 14 }}>
           <View style={styles.notice}>
             <T variant="small" color={colors.warning}>
-              Venue search isn’t connected yet. Tell me the area you’re looking in for now — you can update the venue any time.
+              Tell me the area you’re looking in. Once your party is set up, the 📍 venue planner helps you compare kinds of venue, shortlist real places and track bookings.
             </T>
           </View>
           <Field

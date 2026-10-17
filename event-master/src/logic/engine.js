@@ -42,8 +42,14 @@ export function itemTotal(item) {
   return round2(item.unitPrice * item.qty);
 }
 
+// The booked venue's hire cost (0 when no venue is booked).
+export function venueCost(event) {
+  const booked = bookedVenue(event);
+  return booked && booked.cost > 0 ? round2(booked.cost) : 0;
+}
+
 export function planTotal(event) {
-  return round2(event.items.reduce((sum, i) => sum + itemTotal(i), 0));
+  return round2(event.items.reduce((sum, i) => sum + itemTotal(i), 0) + venueCost(event));
 }
 
 export function categoryTotal(event, categoryId) {
@@ -501,7 +507,7 @@ export function applyQty(event, itemId, qty) {
 
 // ── Interconnected plan: what an edit affects ───────────────────────────────
 export function analyseChanges(before, after) {
-  const changes = { guests: null, budget: null, vibes: null, removedCategories: [] };
+  const changes = { guests: null, budget: null, vibes: null, venue: null, date: null, removedCategories: [] };
 
   if (before.guests !== after.guests) {
     const items = after.items
@@ -533,12 +539,26 @@ export function analyseChanges(before, after) {
     if (items.length) changes.vibes = { items };
   }
 
+  // Things that depend on the space when the venue changes.
+  const venueName = (e) => (e.venue ? `${e.venue.mode}:${e.venue.name}` : '');
+  if (venueName(before) !== venueName(after) && after.venue && after.venue.mode === 'own') {
+    const items = after.items.filter((i) => VENUE_SENSITIVE.includes(i.slot)).map((i) => ({ itemId: i.id, name: i.name }));
+    if (items.length) changes.venue = { to: after.venue.name, items };
+  }
+  // Invitations may need updating when the date moves.
+  if (before.date !== after.date && after.items.some((i) => i.category === 'invitations')) {
+    changes.date = { from: before.date, to: after.date };
+  }
+
   changes.removedCategories = before.categories.filter((c) => !after.categories.includes(c));
   return changes;
 }
 
+// Slots whose items depend on the venue's space, power or rules.
+export const VENUE_SENSITIVE = ['backdrop', 'lighting', 'sound', 'wow', 'activity'];
+
 export function changesNeedReview(ch) {
-  return !!((ch.guests && ch.guests.items.length) || ch.budget || ch.vibes);
+  return !!((ch.guests && ch.guests.items.length) || ch.budget || ch.vibes || ch.venue || ch.date);
 }
 
 // Apply an edit to the event's details. Items/skips for categories the user
@@ -564,8 +584,9 @@ export function budgetCrossing(before, after) {
   return null;
 }
 
-// What pushed the total up: a newly added item, or the item whose total grew most.
+// What pushed the total up: the venue, a newly added item, or the item whose total grew most.
 export function budgetCause(before, after) {
+  const venueGrew = venueCost(after) - venueCost(before);
   const prev = {};
   before.items.forEach((i) => {
     prev[i.id] = itemTotal(i);
@@ -579,7 +600,84 @@ export function budgetCause(before, after) {
       cause = i;
     }
   });
+  if (venueGrew > biggest) return { name: `Booking ${bookedVenue(after).name}` };
   return cause;
+}
+
+// ── Venues ──────────────────────────────────────────────────────────────────
+// A shortlist of real venues the user is looking at. Availability is only
+// ever what the user recorded ("Confirmed available" / "Booked"); the app
+// never claims it on its own.
+export function venueShortlist(event) {
+  return (event.venuePlan && event.venuePlan.shortlist) || [];
+}
+
+export function bookedVenue(event) {
+  return venueShortlist(event).find((v) => v.status === 'booked') || null;
+}
+
+function withShortlist(event, shortlist, extra = {}) {
+  return { ...event, venuePlan: { ...(event.venuePlan || {}), shortlist, ...extra } };
+}
+
+function cleanVenue(data) {
+  const num = (v) => {
+    const n = Number(String(v ?? '').replace(/[^0-9.]/g, ''));
+    return Number.isFinite(n) && n > 0 ? round2(n) : null;
+  };
+  const url = (data.link || '').trim();
+  return {
+    name: (data.name || '').trim(),
+    area: (data.area || '').trim(),
+    typeId: data.typeId || null,
+    capacity: num(data.capacity),
+    cost: num(data.cost),
+    link: url ? (/^https?:\/\//i.test(url) ? url : `https://${url}`) : '',
+    contact: (data.contact || '').trim(),
+    notes: (data.notes || '').trim(),
+  };
+}
+
+export function applyAddVenue(event, data) {
+  const venue = { id: uid('ven'), status: 'considering', ...cleanVenue(data) };
+  return withShortlist(event, [...venueShortlist(event), venue]);
+}
+
+export function applyUpdateVenue(event, id, data) {
+  return withShortlist(event, venueShortlist(event).map((v) => (v.id === id ? { ...v, ...cleanVenue({ ...v, ...data }) } : v)));
+}
+
+export function applyRemoveVenue(event, id) {
+  const wasBooked = bookedVenue(event);
+  const next = withShortlist(event, venueShortlist(event).filter((v) => v.id !== id));
+  return wasBooked && wasBooked.id === id ? unbook(next) : next;
+}
+
+function unbook(event) {
+  const area = (event.venuePlan && event.venuePlan.area) || '';
+  return { ...event, venue: { mode: 'search', name: area } };
+}
+
+// Booking one venue un-books any other (it goes back to "Confirmed
+// available") and makes it the party's venue.
+export function applyVenueStatus(event, id, status) {
+  const target = venueShortlist(event).find((v) => v.id === id);
+  if (!target) return event;
+  const wasBooked = target.status === 'booked';
+  const shortlist = venueShortlist(event).map((v) => {
+    if (v.id === id) return { ...v, status };
+    if (status === 'booked' && v.status === 'booked') return { ...v, status: 'available' };
+    return v;
+  });
+  if (status === 'booked') {
+    const area = event.venue && event.venue.mode === 'search' ? event.venue.name : (event.venuePlan && event.venuePlan.area) || '';
+    return {
+      ...withShortlist(event, shortlist, { area }),
+      venue: { mode: 'own', name: target.area ? `${target.name}, ${target.area}` : target.name },
+    };
+  }
+  const next = withShortlist(event, shortlist);
+  return wasBooked ? unbook(next) : next;
 }
 
 // Compares two versions of the event list and returns the first budget alert.

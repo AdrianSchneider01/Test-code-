@@ -24,6 +24,7 @@ import {
   ExploreScreen,
 } from './src/screens/Explore';
 import { MemoryPromptScreen, SplashScreen, WelcomeScreen } from './src/screens/Intro';
+import { VenuesScreen } from './src/screens/Venues';
 import { ItemScreen, OwnItemScreen, PartyPlanScreen, ReadyScreen, SuggestScreen } from './src/screens/Planning';
 import { AppStateProvider } from './src/state/AppState';
 import { NavigationProvider, useNav } from './src/state/Navigation';
@@ -54,6 +55,7 @@ const ROUTES = {
   review: ReviewChangesScreen,
   profile: ProfileScreen,
   ideas: SavedIdeasScreen,
+  venues: VenuesScreen,
 };
 
 function Router() {

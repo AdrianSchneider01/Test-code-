@@ -213,7 +213,7 @@ export function Field({ label, prefix, style, inputStyle, error, ...props }) {
             {prefix}
           </T>
         ) : null}
-        <TextInput placeholderTextColor={colors.textDim} style={[styles.input, inputStyle]} {...props} />
+        <TextInput placeholderTextColor={colors.textDim} accessibilityLabel={label} style={[styles.input, inputStyle]} {...props} />
       </View>
       {error ? (
         <T variant="tiny" color={colors.danger} style={{ marginTop: 6 }}>

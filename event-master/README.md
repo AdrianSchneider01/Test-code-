@@ -51,8 +51,18 @@ npm run lint
 - When you start a new event, it offers "I've got a head start!" with the choice to use your memories or start fresh. Choices for the current event always win.
 
 **Plan changes (part of Phase 6)**
-- Editing guests, budget, vibe or categories shows "⚠️ Your party has changed".
-- **Review changes** then offers suggested quantity updates, an over-budget warning, and items that may no longer match your vibe.
+- Editing guests, budget, vibe, categories, venue or date shows "⚠️ Your party has changed".
+- **Review changes** then offers suggested quantity updates, an over-budget warning, and items that may no longer match your vibe. A new venue flags venue-dependent items such as the backdrop, lighting and activities, and a new date flags invitations.
+
+**Venue planner (Phase 5, without a venue service)**
+- Ranks 10 kinds of venue (home, park, hall, restaurant, activity centre, function room, studio, beach, pool, cinema) for the party's guests, budget, vibe and type. Each comes with what's good, what to watch for and questions to ask the venue. AI can personalise the ranking.
+- A shortlist of real places *you* find, with capacity, hire cost, link, contact and notes. Each is tracked from Considering to Enquired, Confirmed available, Booked or Not available.
+- **Event Master never checks or claims availability.** A venue shows as available only when you mark that the venue confirmed it. No venues are invented.
+- Booking a venue sets it as the event's venue, and its hire cost counts toward the budget, so booking can raise a budget alert.
+
+**Plans on every device (claude.ai)**
+- On claude.ai, events, memory, saved ideas and settings sync to the viewer's private space in the artifact's database. Only that person can read it.
+- For each event the newest version wins. Deletes reach every device. Data is also kept on the device, so the app works without sync.
 
 **Responsive design**
 - **Phone:** one column, bottom navigation, Accept and Decline pinned within thumb reach.
@@ -103,9 +113,8 @@ npx wrangler deploy
 | Spec item | Why it's not built | What's needed |
 |---|---|---|
 | Phase 4: real products, images, prices and links | The spec says product facts must come from reliable structured sources, so none were invented | Which shops or product feeds to use |
-| Phase 5: venue search | Needs a venue or availability service. "Find a venue" currently asks for the area you're looking in | Which venue service to use |
-| Supabase (accounts, cloud sync, security rules) | Needs a Supabase project. Data currently stays on the device | A Supabase project URL and key |
-| Date and venue change warnings | The current sample data doesn't depend on date or venue | Real venue and product availability |
+| Phase 5: searching real venues and live availability | Needs a venue or availability service. The venue planner covers everything else | Which venue service to use |
+| Supabase (accounts, security rules) | Needs a Supabase project. Sync currently works only on claude.ai | A Supabase project URL and key |
 
 ## How it's organised
 
@@ -114,9 +123,11 @@ App.js                     fonts, providers, routes, responsive shell
 src/logic/engine.js        recommendation engine (pure functions, unit tested)
 src/logic/memory.js        pattern-based long-term memory (unit tested)
 src/logic/events.js        event creation and the example party
-src/data/catalog.js        SAMPLE product catalogue (fictional shops, no links)
+src/data/catalog.js        SAMPLE product catalogue, ~170 items (fictional shops, no links)
+src/data/venues.js         kinds of venue, booking statuses, venue ranking
 src/data/categories.js     categories, the parts of each category, vibes, event types
 src/state/AppState.js      app state, saved on the device with AsyncStorage
+src/state/sync.js          claude.ai cloud sync: merge rules (unit tested) and the db connection
 src/state/Navigation.js    small stack navigator (supports Android back)
 src/ai/contract.js         AI tasks: JSON schemas + output checks (shared with the Worker)
 src/ai/client.js           calls the Worker, with a non-AI fallback for every feature

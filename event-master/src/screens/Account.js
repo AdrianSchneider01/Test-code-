@@ -251,6 +251,7 @@ export function EventScreen() {
           ) : null}
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 16 }}>
             <Button title="Edit event" icon="✏️" variant="secondary" size="sm" onPress={() => nav.navigate('editEvent', { eventId: event.id })} />
+            <Button title="Venue planner" icon="📍" variant="secondary" size="sm" onPress={() => nav.navigate('venues', { eventId: event.id })} />
             {!complete ? <Button title="Continue planning" size="sm" onPress={() => nav.navigate('party', { eventId: event.id })} /> : null}
             {complete && event.status !== 'saved' ? (
               <Button
@@ -458,6 +459,14 @@ export function EditEventScreen() {
         {pending && pending.vibes ? (
           <T style={{ marginBottom: 10 }}>You changed your vibe, and {pluralise(pending.vibes.items.length, 'item')} may no longer fit.</T>
         ) : null}
+        {pending && pending.venue ? (
+          <T style={{ marginBottom: 10 }}>
+            New venue: {pending.venue.to}. Check {pluralise(pending.venue.items.length, 'item')} that depend on the space still suit it.
+          </T>
+        ) : null}
+        {pending && pending.date ? (
+          <T style={{ marginBottom: 10 }}>You moved the date to {formatDate(pending.date.to)}. If invitations have gone out, let your guests know.</T>
+        ) : null}
         <Gap h={8} />
         <Button title="Review changes →" onPress={() => nav.replace('review', { eventId: event.id, changes: pending })} full />
         <Gap h={8} />
@@ -482,6 +491,7 @@ export function ReviewChangesScreen() {
     .filter((r) => r.item);
   const pendingQty = qtyRows.filter((r) => r.item.qty !== r.to);
   const vibeRows = (changes.vibes ? changes.vibes.items : []).map((c) => event.items.find((i) => i.id === c.itemId)).filter(Boolean);
+  const venueRows = (changes.venue ? changes.venue.items : []).map((c) => event.items.find((i) => i.id === c.itemId)).filter(Boolean);
 
   const updateAll = () => {
     updateEvent(event.id, (e) => pendingQty.reduce((ev, r) => applyQty(ev, r.itemId, r.to), e));
@@ -545,6 +555,32 @@ export function ReviewChangesScreen() {
               <Button size="sm" variant="secondary" title="Change" onPress={() => nav.navigate('item', { eventId: event.id, itemId: item.id })} />
             </View>
           ))}
+        </Card>
+      ) : null}
+
+      {venueRows.length ? (
+        <Card style={{ marginBottom: 16 }}>
+          <SectionTitle>📍 New venue: check these suit the space</SectionTitle>
+          <T variant="small" muted style={{ marginBottom: 8 }}>
+            Size, power points, noise rules and hanging decorations can differ between venues.
+          </T>
+          {venueRows.map((item) => (
+            <View key={item.id} style={[styles.row, { paddingVertical: 8 }]}>
+              <View style={{ flex: 1 }}>
+                <T variant="bodyBold">{item.name}</T>
+              </View>
+              <Button size="sm" variant="secondary" title="Change" onPress={() => nav.navigate('item', { eventId: event.id, itemId: item.id })} />
+            </View>
+          ))}
+        </Card>
+      ) : null}
+
+      {changes.date ? (
+        <Card style={{ marginBottom: 16 }}>
+          <SectionTitle>📅 New date</SectionTitle>
+          <T>
+            {formatDate(changes.date.from)} → {formatDate(changes.date.to)}. If your invitations have already gone out, let your guests know about the new date.
+          </T>
         </Card>
       ) : null}
     </Screen>
@@ -705,8 +741,15 @@ function ProfileSummary({ memories }) {
   return <Button variant="tertiary" size="sm" title="Summarise my style" icon="✨" onPress={run} style={{ alignSelf: 'flex-start', paddingHorizontal: 0 }} />;
 }
 
+const CLOUD_TEXT = {
+  connecting: ['☁️ Connecting…', 'Getting your plans from your Claude account.'],
+  synced: ['☁️ Synced to your Claude account', 'Your events, memory and saved ideas show on every device where you open Event Master. Only you can see them.'],
+  saving: ['☁️ Saving…', 'Sending your latest changes to your Claude account.'],
+  error: ['☁️ Sync paused', 'Your changes are still saved on this device and will sync the next time you open Event Master.'],
+};
+
 export function ProfileScreen() {
-  const { memory, setMemory, settings, setSettings } = useAppState();
+  const { memory, setMemory, settings, setSettings, cloud } = useAppState();
   const ai = useAI();
   const memories = useMemories();
   const toast = useToast();
@@ -762,6 +805,15 @@ export function ProfileScreen() {
           />
         </View>
       </Card>
+
+      {cloud !== 'off' ? (
+        <Card style={{ marginBottom: 20 }} accessibilityLabel="Sync status">
+          <T variant="bodyBold">{CLOUD_TEXT[cloud][0]}</T>
+          <T variant="small" muted>
+            {CLOUD_TEXT[cloud][1]}
+          </T>
+        </Card>
+      ) : null}
 
       {ai.enabled ? <TellMeAboutYou /> : null}
 

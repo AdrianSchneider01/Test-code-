@@ -110,7 +110,7 @@ describe('suggestions', () => {
 
   test('"too expensive" → next suggestion is cheaper', () => {
     let ev = makeEvent({ vibes: ['glam'] });
-    const first = suggestNext(ev, 'decorations', 'balloons', ctx).suggestion;
+    const first = { product: getProduct('bal-black-gold'), qty: 1, lineTotal: 15 };
     ev = applyDecline(ev, first, 'expensive');
     const next = suggestNext(ev, 'decorations', 'balloons', ctx).suggestion;
     expect(next.lineTotal).toBeLessThan(first.lineTotal);
@@ -375,5 +375,73 @@ describe('budget alerts', () => {
     const ev = withItem(makeEvent({ budget: 10 }), 50);
     expect(findBudgetAlert([], [ev])).toBeNull();
     expect(findBudgetAlert([ev], [ev])).toBeNull();
+  });
+});
+
+describe('venues', () => {
+  // eslint-disable-next-line import/first
+  const E = require('../src/logic/engine');
+  // eslint-disable-next-line import/first
+  const { rankVenueTypes } = require('../src/data/venues');
+  const looking = () => makeEvent({ venue: { mode: 'search', name: 'Bondi' }, budget: 300, guests: 25 });
+
+  test('shortlist add / update / remove, with tidy numbers and links', () => {
+    let ev = E.applyAddVenue(looking(), { name: ' Bondi Hall ', area: 'Bondi', capacity: '80', cost: '$150', link: 'bondihall.example' });
+    const v = E.venueShortlist(ev)[0];
+    expect(v).toMatchObject({ name: 'Bondi Hall', capacity: 80, cost: 150, link: 'https://bondihall.example', status: 'considering' });
+    ev = E.applyUpdateVenue(ev, v.id, { cost: '120' });
+    expect(E.venueShortlist(ev)[0].cost).toBe(120);
+    expect(E.venueShortlist(E.applyRemoveVenue(ev, v.id))).toEqual([]);
+  });
+
+  test('only "Booked" sets the venue and adds the hire cost to the budget', () => {
+    let ev = E.applyAddVenue(looking(), { name: 'Bondi Hall', area: 'Bondi', cost: '150' });
+    const id = E.venueShortlist(ev)[0].id;
+    ev = E.applyVenueStatus(ev, id, 'available');
+    expect(ev.venue).toEqual({ mode: 'search', name: 'Bondi' });
+    expect(E.budgetSummary(ev).total).toBe(0);
+    ev = E.applyVenueStatus(ev, id, 'booked');
+    expect(ev.venue).toEqual({ mode: 'own', name: 'Bondi Hall, Bondi' });
+    expect(E.budgetSummary(ev).total).toBe(150);
+  });
+
+  test('booking another venue un-books the first; un-booking goes back to looking', () => {
+    let ev = E.applyAddVenue(looking(), { name: 'A', cost: '100' });
+    ev = E.applyAddVenue(ev, { name: 'B', cost: '200' });
+    const [a, b] = E.venueShortlist(ev).map((v) => v.id);
+    ev = E.applyVenueStatus(ev, a, 'booked');
+    ev = E.applyVenueStatus(ev, b, 'booked');
+    expect(E.venueShortlist(ev).map((v) => v.status)).toEqual(['available', 'booked']);
+    expect(E.venueCost(ev)).toBe(200);
+    ev = E.applyVenueStatus(ev, b, 'enquired');
+    expect(ev.venue).toEqual({ mode: 'search', name: 'Bondi' });
+    expect(E.venueCost(ev)).toBe(0);
+  });
+
+  test('booking a venue that blows the budget raises a budget alert naming it', () => {
+    let ev = E.applyAddVenue(looking(), { name: 'Grand Room', cost: '400' });
+    const after = E.applyVenueStatus(ev, E.venueShortlist(ev)[0].id, 'booked');
+    const alert = E.findBudgetAlert([ev], [after]);
+    expect(alert.type).toBe('over');
+    expect(alert.causeName).toBe('Booking Grand Room');
+  });
+
+  test('venue types are ranked for the party', () => {
+    const top = rankVenueTypes(makeEvent({ guests: 120, vibes: ['elegant', 'glam'], type: 'celebration' }))[0];
+    expect(top.type.id).toBe('function');
+    expect(top.fits).toBe(true);
+    const small = rankVenueTypes(makeEvent({ guests: 8, vibes: ['relaxed'], budget: 100 }))[0];
+    expect(['home', 'park']).toContain(small.type.id);
+  });
+
+  test('changing to a new venue flags space-dependent items; a date change flags invitations', () => {
+    let ev = makeEvent({ categories: ['decorations', 'invitations'], venue: { mode: 'own', name: 'Home' } });
+    ev = E.applyAccept(ev, E.suggestNext(ev, 'decorations', 'backdrop', ctx).suggestion);
+    ev = E.applyAccept(ev, E.suggestNext(ev, 'invitations', 'invites', ctx).suggestion);
+    const after = E.applyEdit(ev, { venue: { mode: 'own', name: 'Community Hall' }, date: '2026-12-24' });
+    const ch = E.analyseChanges(ev, after);
+    expect(ch.venue.items).toHaveLength(1);
+    expect(ch.date).toEqual({ from: '2026-12-01', to: '2026-12-24' });
+    expect(E.changesNeedReview(ch)).toBe(true);
   });
 });

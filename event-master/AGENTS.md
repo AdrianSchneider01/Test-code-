@@ -31,8 +31,8 @@ Run lint and tests before declaring any task done.
 ## Project layout
 
 - `src/logic/` — pure, unit-tested logic (recommendation engine, memory, events). Keep UI out of it.
-- `src/data/` — categories, the SAMPLE product catalogue and Explore ideas.
-- `src/state/` — app state (persisted with AsyncStorage) and navigation.
+- `src/data/` — categories, the SAMPLE product catalogue, venue kinds and Explore ideas. Never invent real venues or claim availability.
+- `src/state/` — app state (persisted with AsyncStorage; synced on claude.ai via `sync.js`) and navigation. Every change to an event must update `updatedAt`, and every change to memory, saved ideas or settings must update `metaUpdatedAt`, or sync will not pick it up.
 - `src/ai/` — AI contract (task schemas + sanitisers, shared with the Worker) and the client. Every AI feature must have a non-AI fallback, and AI output must be sanitised to the app's vocabulary, never trusted for product facts.
 - `worker/` — Cloudflare Worker (serves `dist/` and `/api/ai/*`, calls Claude with the `ANTHROPIC_API_KEY` secret). Tests: `npm run test:worker`.
 - `src/components/`, `src/screens/` — UI.

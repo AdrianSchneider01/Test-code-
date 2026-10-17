@@ -47,6 +47,7 @@ describe('AI contract', () => {
       profileSummary: { memories: ['You’ve chosen purple for 3 events'] },
       explain: { product, reasons: ['Matches your Cute vibe'], event },
       ideas: { event },
+      venueAdvice: { event, setting: 'either' },
       learn: { event, accepted: ['Pink Balloon Set · pink · cute'], declined: [], requests: [], ownItems: [], vibeUnderstanding: '' },
       budgetHelp: { event, budget: 100, total: 120, overBy: 20, items: [{ id: 'i1', name: 'Arch', category: 'Decorations', lineTotal: 28, qty: 1 }] },
       pick: {
@@ -148,7 +149,8 @@ describe('AI product pick', () => {
     const ev = base();
     const ranked = rankCandidates(ev, 'decorations', 'balloons', ctx).list;
     const input = buildPickInput(ev, 'decorations', 'balloons', ranked);
-    const last = ranked[ranked.length - 1].product.id;
+    const last = input.candidates[input.candidates.length - 1].id; // the last one actually offered
+    expect(ranked.length).toBeGreaterThan(input.candidates.length); // only the top few are sent
     expect(sanitizeOutput('pick', { choiceId: last, reason: 'Fits' }, input)).toEqual({ choiceId: last, reason: 'Fits' });
     expect(sanitizeOutput('pick', { choiceId: 'invented-product', reason: 'x' }, input)).toBeNull();
 
@@ -247,5 +249,19 @@ describe('AI party review (learn) and budget help', () => {
     }, input);
     expect(out.suggestions).toEqual([{ itemId: realId, action: 'remove', why: 'Biggest cost' }]);
     expect(buildBudgetHelpInput({ ...ev, budget: 1000 })).toBeNull();
+  });
+});
+
+describe('venue advice', () => {
+  test('only known venue kinds, no duplicates, short questions', () => {
+    const out = sanitizeOutput('venueAdvice', {
+      ideas: [{ typeId: 'hall', why: 'Room for 60' }, { typeId: 'hall', why: 'dup' }, { typeId: 'The Grand Hotel', why: 'invented venue' }, { typeId: 'park', why: 'Free' }],
+      questions: ['Is there a kitchen?', '', 'x'.repeat(400)],
+      tip: 'Book early for weekends.',
+    });
+    expect(out.ideas).toEqual([{ typeId: 'hall', why: 'Room for 60' }, { typeId: 'park', why: 'Free' }]);
+    expect(out.questions).toHaveLength(2);
+    expect(validateInput('venueAdvice', { event: { type: 'birthday', vibes: ['fun'], guests: 60, budget: 400 }, setting: 'indoor' })).toBe(true);
+    expect(validateInput('venueAdvice', { event: { type: 'birthday' }, setting: 'rooftop' })).toBe(false);
   });
 });

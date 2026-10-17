@@ -8,6 +8,9 @@
 
 import { CATEGORY_IDS, COLOURS, EVENT_TYPES, STYLES, VIBES } from '../data/categories';
 import { SHOPS } from '../data/catalog';
+import { VENUE_TYPES } from '../data/venues';
+
+const VENUE_TYPE_IDS = VENUE_TYPES.map((v) => v.id);
 
 export const VIBE_IDS = VIBES.filter((v) => v.id !== 'other').map((v) => v.id);
 export const AI_REASON_IDS = ['expensive', 'colour', 'style', 'size', 'theme', 'shop'];
@@ -66,6 +69,14 @@ export const TASKS = {
       shopsAvoided: enumList(SHOPS),
       notes: { type: 'array', items: str },
       summary: str,
+    }),
+  },
+  // Which kinds of venue suit this party, and what to ask venues.
+  venueAdvice: {
+    schema: obj({
+      ideas: { type: 'array', items: obj({ typeId: { type: 'string', enum: VENUE_TYPE_IDS }, why: str }) },
+      questions: { type: 'array', items: str },
+      tip: str,
     }),
   },
   // Over budget: which items in the plan to swap or remove.
@@ -186,6 +197,18 @@ export function sanitizeOutput(task, raw, input) {
         notes: (Array.isArray(r.notes) ? r.notes : []).map((n) => text(n, 100)).filter(Boolean).slice(0, 3),
         summary: text(r.summary, 200),
       };
+    case 'venueAdvice': {
+      const seen = [];
+      const ideas = (Array.isArray(r.ideas) ? r.ideas : [])
+        .map((x) => ({ typeId: pick([x && x.typeId], VENUE_TYPE_IDS)[0], why: text(x && x.why, 160) }))
+        .filter((x) => x.typeId && !seen.includes(x.typeId) && seen.push(x.typeId))
+        .slice(0, 4);
+      return {
+        ideas,
+        questions: (Array.isArray(r.questions) ? r.questions : []).map((q) => text(q, 140)).filter(Boolean).slice(0, 6),
+        tip: text(r.tip, 200),
+      };
+    }
     case 'budgetHelp': {
       const ids = input && Array.isArray(input.items) ? input.items.map((i) => i.id) : [];
       const seen = [];
@@ -304,6 +327,8 @@ export function validateInput(task, input) {
         isOptStrList(input.ownItems, 20) &&
         isOptText(input.vibeUnderstanding, 200)
       );
+    case 'venueAdvice':
+      return isEventInfo(input.event) && (input.setting == null || ['indoor', 'outdoor', 'either'].includes(input.setting));
     case 'budgetHelp':
       return (
         isEventInfo(input.event) &&

@@ -3,7 +3,7 @@ import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from 'r
 
 import { COLOUR_SWATCH, capitalise, eventTypeOf, getCategory, getSlot, vibeLabel } from '../data/categories';
 import { getProduct } from '../data/catalog';
-import { budgetSummary, categoryProgress, categoryTotal, itemTotal } from '../logic/engine';
+import { budgetSummary, categoryProgress, categoryTotal, itemTotal, venueCost } from '../logic/engine';
 import { formatDate, money } from '../logic/util';
 import { colors, fonts, radius } from '../theme';
 import { Button, Card, StatusPill, T, Tag } from './ui';
@@ -240,8 +240,15 @@ export function CategoryCard({ event, categoryId, onStart, onItem }) {
 }
 
 export function CategoryTotals({ event }) {
+  const venue = venueCost(event);
   return (
     <View style={{ gap: 10 }}>
+      {venue > 0 ? (
+        <View style={styles.rowBetween}>
+          <T>📍 Venue hire</T>
+          <T variant="bodyBold">{money(venue)}</T>
+        </View>
+      ) : null}
       {event.categories.map((c) => {
         const cat = getCategory(c);
         return (

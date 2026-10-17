@@ -95,6 +95,14 @@ export function PartyPlanScreen() {
             {event.name}
           </SectionTitle>
           <EventSummary event={event} compact />
+          <Button
+            variant="tertiary"
+            size="sm"
+            icon="📍"
+            title={event.venue && event.venue.mode === 'search' ? 'Find a venue' : 'Venue planner'}
+            onPress={() => nav.navigate('venues', { eventId: event.id })}
+            style={{ alignSelf: 'flex-start', paddingHorizontal: 0, marginTop: 8 }}
+          />
         </Card>
         <Card>
           <SectionTitle>Budget</SectionTitle>
@@ -266,11 +274,13 @@ export function SuggestScreen() {
   const suggestionKey = `${catId}/${slot ? slot.id : ''}/${suggestion ? suggestion.product.id : 'none'}`;
 
   // Bring the card back only once the NEXT suggestion is on screen, so the
-  // previous card never flashes back after its exit animation.
-  const busy = leavingKey === suggestionKey;
+  // previous card never flashes back after its exit animation. Any change to
+  // the event (e.g. an Undo that brings the same suggestion back) also frees it.
+  const stamp = event ? event.updatedAt || '' : '';
+  const busy = !!leavingKey && leavingKey.key === suggestionKey && leavingKey.stamp === stamp;
   useEffect(() => {
     swipe.setValue(0);
-  }, [suggestionKey, swipe]);
+  }, [suggestionKey, stamp, swipe]);
 
   if (!event) return <MissingEvent />;
   if (params.replaceItemId && !replaceItem) return <MissingEvent />;
@@ -294,7 +304,7 @@ export function SuggestScreen() {
   const openItem = (item) => nav.navigate('item', { eventId: event.id, itemId: item.id });
 
   const animateOut = (direction, then) => {
-    setLeavingKey(suggestionKey);
+    setLeavingKey({ key: suggestionKey, stamp });
     Animated.timing(swipe, { toValue: direction, duration: 260, easing: Easing.in(Easing.cubic), useNativeDriver: nativeDriver }).start(() => then());
   };
 
