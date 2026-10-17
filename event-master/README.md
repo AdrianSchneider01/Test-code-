@@ -21,6 +21,11 @@ npm run lint
 
 ## What's built
 
+**Real products (Phase 4, part)**
+- 214 real products from Kmart, Woolworths, Coles and Officeworks. Each has its real name, price, pack size and a link to its page on the shop's website. They were found by web search on 17 Oct 2026, and nothing is made up.
+- Every product shows "View at <shop>" and when its price was checked, because prices can change.
+- Things shops don't sell, like playlists, entertainers and hire services, have no suggestions. You can add your own or skip.
+
 **Build Phase 1: core app**
 - Splash and Welcome screens, with Start a party or Explore first.
 - Explore Mode: ideas, browsing products, what Event Master can plan, an interactive demo of how it works, and an example party. Nothing in Explore creates a real event.
@@ -112,7 +117,7 @@ npx wrangler deploy
 
 | Spec item | Why it's not built | What's needed |
 |---|---|---|
-| Phase 4: exact real products, photos and live prices | The spec says product facts must come from reliable structured sources. Suggestions are example items whose real-shop buttons search Kmart, BIG W, Officeworks, Woolworths, Amazon AU, eBay AU or Etsy | A product feed or shop API (e.g. an affiliate programme) |
+| Phase 4: product photos and live prices | Products are real (found on the shops' own websites on 17 Oct 2026, with links), but prices are as checked that day and there are no photos. Live prices and photos need a product feed | A product feed or shop API (e.g. an affiliate programme) |
 | Phase 5: searching real venues and live availability | Needs a venue or availability service. The venue planner covers everything else | Which venue service to use |
 | Supabase (accounts, security rules) | Needs a Supabase project. Sync currently works only on claude.ai | A Supabase project URL and key |
 
@@ -123,7 +128,7 @@ App.js                     fonts, providers, routes, responsive shell
 src/logic/engine.js        recommendation engine (pure functions, unit tested)
 src/logic/memory.js        pattern-based long-term memory (unit tested)
 src/logic/events.js        event creation and the example party
-src/data/catalog.js        SAMPLE product catalogue, ~170 items (fictional shops, no links)
+src/data/catalog.js        REAL product catalogue: 214 products from Kmart, Woolworths, Coles and Officeworks, with links and checked prices
 src/data/venues.js         kinds of venue, booking statuses, venue ranking
 src/data/shops.js          real Australian shops and their search links (unit tested)
 src/data/categories.js     categories, the parts of each category, vibes, event types

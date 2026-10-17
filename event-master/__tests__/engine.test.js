@@ -46,6 +46,7 @@ function makeEvent(overrides = {}) {
 }
 
 const ctx = { profile: null, savedProductIds: [] };
+const PINK = 'balloons-46-piece-pink-balloon-garland'; // Kmart, $6, pink, cute
 
 describe('catalogue integrity', () => {
   test('every product belongs to a real category slot and has the fields the UI needs', () => {
@@ -57,14 +58,19 @@ describe('catalogue integrity', () => {
       expect(ids.has(p.id)).toBe(false);
       ids.add(p.id);
       expect(typeof p.price).toBe('number');
-      expect(p.url).toBeNull();
+      // Real products only: a product page on the shop's own website, with the date the price was checked.
+      expect(p.url).toMatch(/^https:\/\/(www\.)?(kmart|bigw|officeworks|woolworths|coles|target|aldi|lincraft)\.com\.au\/|^https:\/\/(www\.)?(spotlightstores|amazon\.com\.au)/);
+      expect(p.checkedAt).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(p.sample).toBeUndefined();
     });
   });
 
-  test('every slot has at least three options', () => {
+  test('every slot shops sell has at least three real options (playlists are not sold)', () => {
     CATEGORIES.forEach((c) =>
       c.slots.forEach((s) => {
-        expect(CATALOG.filter((p) => p.category === c.id && p.slot === s.id).length).toBeGreaterThanOrEqual(3);
+        const n = CATALOG.filter((p) => p.category === c.id && p.slot === s.id).length;
+        if (s.id === 'playlist') expect(n).toBe(0);
+        else expect(n).toBeGreaterThanOrEqual(3);
       }),
     );
   });
@@ -72,10 +78,10 @@ describe('catalogue integrity', () => {
 
 describe('quantities and budget', () => {
   test('per-guest quantities round up; fixed stay fixed', () => {
-    expect(computeQty(getProduct('bal-pink-20'), 12)).toBe(2);
-    expect(computeQty(getProduct('bal-pink-20'), 10)).toBe(1);
-    expect(computeQty(getProduct('gm-pinata'), 40)).toBe(1);
-    expect(computeQty(getProduct('snk-fruit-cups'), 7)).toBe(7);
+    const bags = getProduct('bags-8-pack-fabric-loot-bags'); // 8 bags, one pack per 8 guests
+    expect(computeQty(bags, 8)).toBe(1);
+    expect(computeQty(bags, 9)).toBe(2);
+    expect(computeQty(getProduct(PINK), 40)).toBe(1);
   });
 
   test('accepting updates total and remaining budget', () => {
@@ -95,22 +101,24 @@ describe('quantities and budget', () => {
 describe('suggestions', () => {
   test('cute/fun event gets the pink balloon set first, with reasons', () => {
     const { suggestion } = suggestNext(makeEvent(), 'decorations', 'balloons', ctx);
-    expect(suggestion.product.id).toBe('bal-pink-20');
+    expect(suggestion.product.colour).toBe('pink');
+    expect(suggestion.product.vibes).toContain('cute');
     expect(suggestion.reasons.length).toBeGreaterThan(0);
     expect(suggestion.reasons.join(' ')).toMatch(/vibe/);
   });
 
-  test('accepted items influence the next suggestion (pink balloons → purple star garland)', () => {
+  test('accepted items influence the next suggestion (pink balloons → a matching pink banner)', () => {
     let ev = makeEvent({ vibes: ['cute', 'party'] });
-    ev = applyAccept(ev, suggestNext(ev, 'decorations', 'balloons', ctx).suggestion);
+    const balloons = suggestNext(ev, 'decorations', 'balloons', ctx).suggestion;
+    ev = applyAccept(ev, balloons);
     const { suggestion } = suggestNext(ev, 'decorations', 'banner', ctx);
-    expect(suggestion.product.id).toBe('ban-purple-stars');
-    expect(suggestion.reasons).toContain('Goes with your Pink Balloon Set');
+    expect(['pink', 'purple', 'white', 'gold']).toContain(suggestion.product.colour);
+    expect(suggestion.reasons).toContain(`Goes with your ${balloons.product.name}`);
   });
 
   test('"too expensive" → next suggestion is cheaper', () => {
     let ev = makeEvent({ vibes: ['glam'] });
-    const first = { product: getProduct('bal-black-gold'), qty: 1, lineTotal: 15 };
+    const first = { product: getProduct('balloons-artwrap-confetti-balloon-garland-kit-bla'), qty: 1, lineTotal: 10.99 };
     ev = applyDecline(ev, first, 'expensive');
     const next = suggestNext(ev, 'decorations', 'balloons', ctx).suggestion;
     expect(next.lineTotal).toBeLessThan(first.lineTotal);
@@ -141,7 +149,7 @@ describe('suggestions', () => {
 
   test('"doesn’t fit my theme" → stronger vibe match', () => {
     let ev = makeEvent({ vibes: ['glam', 'party'] });
-    const rainbow = { product: getProduct('bal-rainbow-50'), qty: 1, lineTotal: 7 };
+    const rainbow = { product: getProduct('balloons-unique-multi-colour-pre-filled-confetti'), qty: 1, lineTotal: 4.99 };
     ev = applyDecline(ev, rainbow, 'theme'); // overlap 1 (party)
     const next = suggestNext(ev, 'decorations', 'balloons', ctx).suggestion;
     expect(next.product.vibes.filter((v) => ev.vibes.includes(v)).length).toBeGreaterThanOrEqual(2);
@@ -176,7 +184,7 @@ describe('suggestions', () => {
 
   test('when constraints rule everything out, it relaxes and says so', () => {
     let ev = makeEvent();
-    const cheapest = { product: getProduct('bal-pink-20'), qty: 1, lineTotal: 5 };
+    const cheapest = { product: getProduct('balloons-12-piece-gold-and-silver-chrome-balloons'), qty: 1, lineTotal: 2.5 };
     ev = applyDecline(ev, cheapest, 'expensive');
     const res = suggestNext(ev, 'decorations', 'balloons', ctx);
     expect(res.relaxed).toBe(true);
@@ -205,7 +213,7 @@ describe('suggestions', () => {
     const { suggestion } = suggestNext(ev, 'decorations', 'balloons', { profile, savedProductIds: [] });
     expect(suggestion.product.colour).toBe('gold');
     expect(suggestion.reasons).toContain('In colours you usually love');
-    const saved = suggestNext(ev, 'decorations', 'balloons', { profile: null, savedProductIds: ['bal-white-arch'] });
+    const saved = suggestNext(ev, 'decorations', 'balloons', { profile: null, savedProductIds: ['balloons-five-star-navy-balloons-30cm-pack-of-18'] });
     expect(saved.suggestion.reasons).toContain('From your saved ideas');
   });
 
@@ -285,8 +293,11 @@ describe('change, remove and edit', () => {
     expect(ch.guests.from).toBe(12);
     expect(ch.guests.to).toBe(20);
     const names = ch.guests.items.map((i) => i.name);
-    expect(names).toContain('Fruit Cups');
-    expect(names).not.toContain('Star Piñata');
+    // Flagged: exactly the per-guest items whose suggested quantity changes for 20 guests.
+    const changes = (i) => computeQty(getProduct(i.productId), 12) !== computeQty(getProduct(i.productId), 20);
+    expect(before.items.filter(changes).length).toBeGreaterThan(0);
+    before.items.filter(changes).forEach((i) => expect(names).toContain(i.name));
+    before.items.filter((i) => getProduct(i.productId).qty.type === 'fixed').forEach((i) => expect(names).not.toContain(i.name));
     expect(changesNeedReview(ch)).toBe(true);
   });
 
@@ -306,7 +317,7 @@ describe('events', () => {
   test('example party is complete and within budget', () => {
     expect(isPlanComplete(EXAMPLE_PARTY)).toBe(true);
     const b = budgetSummary(EXAMPLE_PARTY);
-    expect(b.total).toBe(287);
+    expect(b.total).toBeGreaterThan(0);
     expect(b.over).toBe(false);
   });
 
@@ -361,13 +372,15 @@ describe('budget alerts', () => {
 
   test('quantity increases count too, and the alert names the cause', () => {
     let ev = makeEvent({ budget: 20, guests: 10 });
-    ev = applyAccept(ev, suggestNext(ev, 'decorations', 'balloons', ctx).suggestion); // $5
+    const first = suggestNext(ev, 'decorations', 'balloons', ctx).suggestion;
+    ev = applyAccept(ev, first);
     const id = ev.items[0].id;
-    const after = applyQty(ev, id, 5); // $25
+    const qty = Math.floor(20 / first.product.price) + 1; // just over $20
+    const after = applyQty(ev, id, qty);
     const alert = findBudgetAlert([ev], [after]);
     expect(alert.type).toBe('over');
-    expect(alert.overBy).toBe(5);
-    expect(alert.causeName).toBe('Pink Balloon Set');
+    expect(alert.overBy).toBeCloseTo(qty * first.product.price - 20, 2);
+    expect(alert.causeName).toBe(first.product.name);
     expect(alert.previous).toBe(ev);
   });
 

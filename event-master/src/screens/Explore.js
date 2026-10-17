@@ -15,11 +15,11 @@ import { Screen } from '../components/Screen';
 import { Button, Card, Chip, Gap, Grid, OptionRow, SectionTitle, Sheet, T, Tag } from '../components/ui';
 import { useStartParty } from '../components/useStartParty';
 import { CATEGORIES, capitalise, getCategory, getSlot } from '../data/categories';
-import { CATALOG } from '../data/catalog';
+import { CATALOG, PRICES_CHECKED } from '../data/catalog';
 import { CATEGORY_EXAMPLES, IDEA_GROUPS } from '../data/ideas';
 import { DECLINE_REASONS, applyAccept, applyDecline, planTotal, suggestNext } from '../logic/engine';
 import { EXAMPLE_PARTY } from '../logic/events';
-import { money } from '../logic/util';
+import { formatDate, money } from '../logic/util';
 import { useAppState, useIsSaved } from '../state/AppState';
 import { useNav } from '../state/Navigation';
 import { colors, useLayout } from '../theme';
@@ -143,9 +143,6 @@ export function ProductSheet({ product, onClose }) {
           <Tag>{getCategory(product.category).name}</Tag>
           <Tag>{slot ? slot.name : ''}</Tag>
           <Tag>🏪 {product.retailer}</Tag>
-          <Tag color={colors.warning} bg="rgba(251,191,36,0.1)">
-            Example item
-          </Tag>
         </View>
         <View style={{ marginTop: 10 }}>
           <ViewProductLink url={product.url} productId={product.id} />
@@ -169,11 +166,11 @@ export function ExploreProductsScreen() {
     <ExploreFrame title="Products">
       <T variant="h1">🛍️ Browse products</T>
       <T muted style={{ marginTop: 6 }}>
-        Examples of products Event Master can recommend. Browsing never adds anything to a party.
+        Real products from Australian shops that Event Master can recommend. Browsing never adds anything to a party.
       </T>
       <View style={styles.notice}>
         <T variant="small" color={colors.warning}>
-          These are sample products. Real products, photos and shop links will be connected later.
+          Prices were checked on {formatDate(PRICES_CHECKED)} and can change. Tap a product, then “View at …” for today’s price.
         </T>
       </View>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 18 }}>

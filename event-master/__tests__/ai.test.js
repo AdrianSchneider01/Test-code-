@@ -37,7 +37,7 @@ describe('AI contract', () => {
   });
 
   test('every task validates a realistic input from the app', () => {
-    const product = { name: 'Pink Balloon Set', colour: 'pink', style: 'cute', retailer: 'Party Lane', lineTotal: 10 };
+    const product = { name: 'Pink Balloon Set', colour: 'pink', style: 'cute', retailer: 'Kmart', lineTotal: 10 };
     const event = { type: 'birthday', vibes: ['cute'], guests: 10, budget: 150, categories: ['decorations'] };
     const inputs = {
       feedback: { note: 'too bright', product },
@@ -54,8 +54,8 @@ describe('AI contract', () => {
         event,
         context: { lookingFor: 'Decorations — Balloons', accepted: [], declined: [], requests: [], profile: [], savedIdeas: [], partyIdeas: [], remainingBudget: 150 },
         candidates: [
-          { id: 'a', name: 'A', colour: 'pink', style: 'cute', retailer: 'Party Lane', packLabel: '1', lineTotal: 5, vibes: ['cute'], whyRules: [] },
-          { id: 'b', name: 'B', colour: 'gold', style: 'luxe', retailer: 'Glow & Co', packLabel: '1', lineTotal: 9, vibes: ['glam'], whyRules: [] },
+          { id: 'a', name: 'A', colour: 'pink', style: 'cute', retailer: 'Kmart', packLabel: '1', lineTotal: 5, vibes: ['cute'], whyRules: [] },
+          { id: 'b', name: 'B', colour: 'gold', style: 'luxe', retailer: 'Coles', packLabel: '1', lineTotal: 9, vibes: ['glam'], whyRules: [] },
         ],
       },
     };
@@ -79,15 +79,15 @@ describe('engine uses AI results', () => {
 
   test('"Ask Event Master" refinements steer suggestions and can be removed', () => {
     let ev = base();
-    expect(suggestNext(ev, 'decorations', 'balloons', ctx).suggestion.product.id).toBe('bal-pink-20');
+    const firstId = suggestNext(ev, 'decorations', 'balloons', ctx).suggestion.product.id;
     ev = applyRefinement(ev, 'something more elegant', {
       preferVibes: ['elegant'], preferColours: ['gold'], avoidColours: [], preferStyles: [], avoidStyles: [], maxPrice: null, summary: 'More elegant',
     });
     const next = suggestNext(ev, 'decorations', 'balloons', ctx).suggestion;
-    expect(next.product.id).toBe('bal-gold-confetti');
+    expect(next.product.id).toBe('balloons-partyrama-gold-4m-balloon-arch-kit');
     expect(next.reasons).toContain('As you asked: More elegant');
     const back = removeRefinement(ev, ev.refinements[0].id);
-    expect(suggestNext(back, 'decorations', 'balloons', ctx).suggestion.product.id).toBe('bal-pink-20');
+    expect(suggestNext(back, 'decorations', 'balloons', ctx).suggestion.product.id).toBe(firstId);
   });
 
   test('a refinement with a price cap pushes over-cap options down', () => {
@@ -108,7 +108,7 @@ describe('engine uses AI results', () => {
 
   test('theme declines are now enforced as a filter', () => {
     let ev = { ...base(), vibes: ['glam', 'party'] };
-    ev = applyDecline(ev, { product: getProduct('bal-rainbow-50'), qty: 1, lineTotal: 7 }, 'theme');
+    ev = applyDecline(ev, { product: getProduct('balloons-unique-multi-colour-pre-filled-confetti'), qty: 1, lineTotal: 4.99 }, 'theme');
     const list = rankCandidates(ev, 'decorations', 'balloons', ctx).list;
     list.forEach((s) => expect(s.product.vibes.filter((v) => ev.vibes.includes(v)).length).toBeGreaterThanOrEqual(2));
     expect(categoryProgress(ev, 'decorations').status).toBe('in_progress');
@@ -184,7 +184,7 @@ describe('single-prompt form (claude.ai sample capability)', () => {
   test('prompt carries the task instructions, the exact schema and the data', () => {
     // eslint-disable-next-line import/first
     const { PROMPTS, buildPrompt } = require('../src/ai/prompts');
-    const input = { note: 'too bright', product: { name: 'Pink Balloon Set', colour: 'pink', style: 'cute', retailer: 'Party Lane', lineTotal: 10 } };
+    const input = { note: 'too bright', product: { name: 'Pink Balloon Set', colour: 'pink', style: 'cute', retailer: 'Kmart', lineTotal: 10 } };
     const prompt = buildPrompt('feedback', input, TASKS.feedback.schema);
     expect(prompt.startsWith(PROMPTS.feedback)).toBe(true);
     expect(prompt).toContain(JSON.stringify(TASKS.feedback.schema));
@@ -213,7 +213,7 @@ describe('AI party review (learn) and budget help', () => {
   test('learn input covers choices, feedback, requests and own items, with no names or venues', () => {
     const input = buildLearnInput(planned());
     expect(validateInput('learn', input)).toBe(true);
-    expect(input.accepted[0]).toMatch(/Pink Balloon Set/);
+    expect(input.accepted[0]).toMatch(/Pink/);
     expect(input.declined[0]).toMatch(/Softer colours/);
     expect(input.requests).toEqual(['more elegant (More elegant)']);
     expect(input.ownItems).toEqual(['Nana’s tablecloth — family heirloom']);
@@ -222,12 +222,12 @@ describe('AI party review (learn) and budget help', () => {
 
   test('learn output is limited to known values', () => {
     const out = sanitizeOutput('learn', {
-      colours: ['Gold', 'neon'], styles: ['luxe'], vibes: ['elegant', 'spooky'], shopsLiked: ['Glow & Co', 'Amazon'],
+      colours: ['Gold', 'neon'], styles: ['luxe'], vibes: ['elegant', 'spooky'], shopsLiked: ['Coles', 'Amazon'],
       shopsAvoided: [], notes: ['Likes to make their own decorations', '', 'x'.repeat(300)], summary: 'An elegant, golden party.',
     });
     expect(out.colours).toEqual(['gold']);
     expect(out.vibes).toEqual(['elegant']);
-    expect(out.shopsLiked).toEqual(['Glow & Co']);
+    expect(out.shopsLiked).toEqual(['Coles']);
     expect(out.notes).toHaveLength(2);
     expect(out.notes[1].length).toBeLessThanOrEqual(100);
   });

@@ -656,11 +656,6 @@ export function ItemScreen() {
                   <Tag>{capitalise(product.colour)}</Tag>
                   <Tag>{capitalise(product.style)} style</Tag>
                   <Tag>🏪 {product.retailer}</Tag>
-                  {product.sample ? (
-                    <Tag color={colors.warning} bg="rgba(251,191,36,0.1)">
-                      Example item
-                    </Tag>
-                  ) : null}
                 </View>
               </>
             ) : null}

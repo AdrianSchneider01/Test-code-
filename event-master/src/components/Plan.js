@@ -3,7 +3,6 @@ import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from 'r
 
 import { COLOUR_SWATCH, capitalise, eventTypeOf, getCategory, getSlot, vibeLabel } from '../data/categories';
 import { getProduct } from '../data/catalog';
-import { shopLinks } from '../data/shops';
 import { budgetSummary, categoryProgress, categoryTotal, itemTotal, venueCost } from '../logic/engine';
 import { formatDate, money } from '../logic/util';
 import { colors, fonts, radius } from '../theme';
@@ -29,49 +28,40 @@ export function openLink(url) {
   if (url) Linking.openURL(url).catch(() => {});
 }
 
-// A direct link when the item has one (e.g. your own item), otherwise search
-// links to real Australian shops that sell this kind of thing.
+// The product's page at its shop (with when the price was checked), or a
+// link the user added to their own item.
 export function ViewProductLink({ url, productId, compact }) {
-  if (url) {
-    return <Button variant="tertiary" title="View product ↗" onPress={() => openLink(url)} size="md" style={{ alignSelf: 'flex-start', paddingHorizontal: 0 }} />;
-  }
-  const shops = productId ? shopLinks(getProduct(productId)) : [];
-  if (!shops.length) return null;
-  if (compact) {
+  const product = productId ? getProduct(productId) : null;
+  if (url && product && product.retailer) {
+    const checked = product.checkedAt ? `Price checked ${formatDate(product.checkedAt)} — it may have changed.` : null;
+    if (compact) {
+      return (
+        <Pressable onPress={() => openLink(url)} accessibilityRole="link" accessibilityLabel={`View at ${product.retailer}`} hitSlop={8} style={{ alignSelf: 'flex-start', marginTop: 4 }}>
+          <T variant="tiny" color={colors.pink} style={{ fontFamily: fonts.bold }}>
+            View at {product.retailer} ↗
+          </T>
+        </Pressable>
+      );
+    }
     return (
-      <View style={styles.shopRow}>
-        <T variant="tiny" dim>
-          🔎 Find it:
-        </T>
-        {shops.map((s) => (
-          <Pressable key={s.id} onPress={() => openLink(s.url)} accessibilityRole="link" accessibilityLabel={`Search ${s.name}`} hitSlop={8}>
-            <T variant="tiny" color={colors.pink} style={{ fontFamily: fonts.bold }}>
-              {s.name} ↗
-            </T>
-          </Pressable>
-        ))}
+      <View style={{ marginTop: 14, alignSelf: 'stretch' }}>
+        <Pressable onPress={() => openLink(url)} accessibilityRole="link" accessibilityLabel={`View at ${product.retailer}`} style={[styles.shopBtn, { alignSelf: 'flex-start' }]}>
+          <T variant="small" style={{ fontFamily: fonts.bold }}>
+            🛒 View at {product.retailer} ↗
+          </T>
+        </Pressable>
+        {checked ? (
+          <T variant="tiny" dim style={{ marginTop: 6 }}>
+            {checked}
+          </T>
+        ) : null}
       </View>
     );
   }
-  return (
-    <View style={{ marginTop: 14, alignSelf: 'stretch' }}>
-      <T variant="label" dim style={{ marginBottom: 8 }}>
-        🔎 Find it in real shops
-      </T>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-        {shops.map((s) => (
-          <Pressable key={s.id} onPress={() => openLink(s.url)} accessibilityRole="link" accessibilityLabel={`Search ${s.name}`} style={styles.shopBtn}>
-            <T variant="small" style={{ fontFamily: fonts.bold }}>
-              {s.name} ↗
-            </T>
-          </Pressable>
-        ))}
-      </View>
-      <T variant="tiny" dim style={{ marginTop: 6 }}>
-        Opens the shop’s search. Prices here are estimates — the shop shows the real price.
-      </T>
-    </View>
-  );
+  if (url) {
+    return <Button variant="tertiary" title="View product ↗" onPress={() => openLink(url)} size="md" style={{ alignSelf: 'flex-start', paddingHorizontal: 0 }} />;
+  }
+  return null;
 }
 
 export function BudgetBar({ event, compact }) {
@@ -138,7 +128,6 @@ export function SuggestionCard({ suggestion, onSave, saved, onExplain, explainin
         <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
           <Tag>{slot ? slot.name : 'Party item'}</Tag>
           <Tag>🏪 {p.retailer}</Tag>
-          {p.sample ? <Tag color={colors.warning} bg="rgba(251,191,36,0.1)">Example item</Tag> : null}
         </View>
       </View>
       <ViewProductLink url={p.url} productId={p.id} />
@@ -331,7 +320,6 @@ export function BudgetBreakdown({ event }) {
 }
 
 const styles = StyleSheet.create({
-  shopRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 10, rowGap: 4, marginTop: 4 },
   shopBtn: { minHeight: 40, paddingHorizontal: 14, justifyContent: 'center', borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, backgroundColor: 'rgba(124,58,237,0.12)' },
   rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   track: { height: 8, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.08)', marginTop: 10, marginBottom: 8, overflow: 'hidden' },

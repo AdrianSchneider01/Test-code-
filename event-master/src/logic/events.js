@@ -1,5 +1,5 @@
 import { DEFAULT_CATEGORY_IDS } from '../data/categories';
-import { getProduct } from '../data/catalog';
+import { CATALOG, getProduct } from '../data/catalog';
 import { applyAccept, computeQty, isPlanComplete } from './engine';
 import { todayISO, uid } from './util';
 
@@ -82,12 +82,10 @@ export const EXAMPLE_PARTY = eventWithProducts(
     createdAt: '2026-10-01T00:00:00.000Z',
     savedAt: '2026-10-01T00:00:00.000Z',
   },
-  [
-    'bal-pink-20', 'ban-purple-stars', 'tab-pink-set', 'bd-foil-purple',
-    'food-pizza', 'snk-fruit-cups', 'drk-lemonade',
-    'cake-pink-tier', 'cnd-pink-sparkler',
-    'act-bracelet-bar', 'gm-pinata',
-    'inv-printed-pink',
-    'bag-pink-paper', 'fil-lipgloss',
-  ],
+  // One real product for each part of the party, pink and cute where possible.
+  ['balloons', 'banner', 'table', 'backdrop', 'mains', 'snacks', 'drinks', 'cake', 'candles', 'activity', 'game', 'invites', 'bags', 'fillers'].map((slot) => {
+    const options = CATALOG.filter((x) => x.slot === slot);
+    const best = options.find((x) => x.colour === 'pink' && x.vibes.includes('cute')) || options.find((x) => x.colour === 'pink') || options[0];
+    return best.id;
+  }),
 );

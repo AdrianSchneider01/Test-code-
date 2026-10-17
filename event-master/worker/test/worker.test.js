@@ -31,7 +31,7 @@ function post(task, body, headers = {}) {
   });
 }
 
-const product = { name: 'Pink Balloon Set', colour: 'pink', style: 'cute', retailer: 'Party Lane', lineTotal: 10 };
+const product = { name: 'Pink Balloon Set', colour: 'pink', style: 'cute', retailer: 'Kmart', lineTotal: 10 };
 
 describe('every task has a prompt and a strict schema', () => {
   test.each(Object.keys(TASKS))('%s', (task) => {
@@ -91,12 +91,12 @@ describe('API', () => {
   });
 
   test('memories are filtered to known vocabulary', async () => {
-    const res = await handleApi(post('memories', { text: 'I love gold and always shop at Glow & Co' }), ENV, {
+    const res = await handleApi(post('memories', { text: 'I love gold and always shop at Kmart' }), ENV, {
       makeClient: fakeClient(
         textReply({
           memories: [
             { type: 'colour', value: 'Gold' },
-            { type: 'shopLike', value: 'glow & co' },
+            { type: 'shopLike', value: 'kmart' },
             { type: 'shopLike', value: 'Amazon' },
             { type: 'colour', value: 'gold' },
             { type: 'note', value: 'Plans a month ahead' },
@@ -107,7 +107,7 @@ describe('API', () => {
     const { result } = await res.json();
     expect(result.memories).toEqual([
       { type: 'colour', value: 'gold' },
-      { type: 'shopLike', value: 'Glow & Co' },
+      { type: 'shopLike', value: 'Kmart' },
       { type: 'note', value: 'Plans a month ahead' },
     ]);
   });
@@ -117,8 +117,8 @@ describe('API', () => {
       event: { type: 'birthday', vibes: ['cute'], guests: 10, budget: 150 },
       context: { lookingFor: 'Decorations — Balloons', accepted: [], declined: [], requests: [], profile: [], savedIdeas: [], partyIdeas: [], remainingBudget: 150 },
       candidates: [
-        { id: 'bal-pink-20', name: 'Pink Balloon Set', colour: 'pink', style: 'cute', retailer: 'Party Lane', packLabel: '20 balloons', lineTotal: 5, vibes: ['cute'], whyRules: [] },
-        { id: 'bal-gold-confetti', name: 'Gold Confetti Balloons', colour: 'gold', style: 'classic', retailer: 'Party Lane', packLabel: '10 balloons', lineTotal: 18, vibes: ['elegant'], whyRules: [] },
+        { id: 'bal-pink-20', name: 'Pink Balloon Set', colour: 'pink', style: 'cute', retailer: 'Kmart', packLabel: '20 balloons', lineTotal: 5, vibes: ['cute'], whyRules: [] },
+        { id: 'bal-gold-confetti', name: 'Gold Confetti Balloons', colour: 'gold', style: 'classic', retailer: 'Kmart', packLabel: '10 balloons', lineTotal: 18, vibes: ['elegant'], whyRules: [] },
       ],
     };
     const bad = await handleApi(post('pick', input), ENV, { makeClient: fakeClient(textReply({ choiceId: 'made-up-item', reason: 'x' })) });

@@ -40,27 +40,27 @@ const mem = { ...DEFAULT_MEMORY };
 
 describe('memory patterns', () => {
   test('one choice is NOT a permanent preference', () => {
-    const events = [savedEvent('a', ['bal-purple-chrome'])];
+    const events = [savedEvent('a', ['balloons-unique-purple-galaxy-balloon-garland-kit'])];
     expect(learnedMemories(events, mem).find((m) => m.type === 'colour')).toBeUndefined();
   });
 
   test('repeated choices become a learned pattern with a count', () => {
-    const events = [savedEvent('a', ['bal-purple-chrome']), savedEvent('b', ['ban-purple-stars']), savedEvent('c', ['tab-purple-galaxy'])];
+    const events = [savedEvent('a', ['balloons-unique-purple-galaxy-balloon-garland-kit']), savedEvent('b', ['invites-16-piece-magical-party-invitations']), savedEvent('c', ['bags-meteor-party-8pc-loot-gift-bags-unicorn'])];
     const purple = learnedMemories(events, mem).find((m) => m.key === 'colour:purple');
     expect(purple.count).toBe(3);
     expect(purple.text).toBe('You’ve chosen purple for 3 events');
   });
 
   test('unsaved events do not teach anything', () => {
-    const e1 = { ...savedEvent('a', ['bal-purple-chrome']), status: 'planning' };
-    const e2 = savedEvent('b', ['ban-purple-stars']);
+    const e1 = { ...savedEvent('a', ['balloons-unique-purple-galaxy-balloon-garland-kit']), status: 'planning' };
+    const e2 = savedEvent('b', ['invites-16-piece-magical-party-invitations']);
     expect(learnedMemories([e1, e2], mem).find((m) => m.type === 'colour')).toBeUndefined();
   });
 
   test('budget range and cake vs cupcakes', () => {
     const events = [
-      savedEvent('a', ['cake-galaxy-cupcakes'], { budget: 150 }),
-      savedEvent('b', ['cake-gold-cupcakes'], { budget: 300 }),
+      savedEvent('a', ['cake-woolworths-mini-iced-mudcake-cupcakes-12'], { budget: 150 }),
+      savedEvent('b', ['cake-woolworths-vanilla-cupcakes-with-butterc'], { budget: 300 }),
     ];
     const list = learnedMemories(events, mem);
     expect(list.find((m) => m.type === 'budget').value).toBe('$150–$300');
@@ -69,14 +69,14 @@ describe('memory patterns', () => {
 
   test('avoided shops become a pattern', () => {
     const events = [
-      savedEvent('a', [], { declines: [['bal-rainbow-50', 'shop']] }),
-      savedEvent('b', [], { declines: [['bag-budget', 'shop']] }),
+      savedEvent('a', [], { declines: [['balloons-61-piece-magical-balloon-garland-pack', 'shop']] }),
+      savedEvent('b', [], { declines: [['bags-8-pack-fabric-loot-bags', 'shop']] }),
     ];
-    expect(learnedMemories(events, mem).find((m) => m.key === 'shopAvoid:Budget Bash')).toBeTruthy();
+    expect(learnedMemories(events, mem).find((m) => m.key === 'shopAvoid:Kmart')).toBeTruthy();
   });
 
   test('forget hides a learned memory', () => {
-    const events = [savedEvent('a', ['bal-purple-chrome']), savedEvent('b', ['ban-purple-stars'])];
+    const events = [savedEvent('a', ['balloons-unique-purple-galaxy-balloon-garland-kit']), savedEvent('b', ['invites-16-piece-magical-party-invitations'])];
     const purple = learnedMemories(events, mem).find((m) => m.key === 'colour:purple');
     const m2 = changeMemory(mem, purple, 'pink');
     const list = effectiveMemories(events, m2);
@@ -93,23 +93,23 @@ describe('memory patterns', () => {
   });
 
   test('clear all ignores events saved before clearing', () => {
-    const events = [savedEvent('a', ['bal-purple-chrome']), savedEvent('b', ['ban-purple-stars'])];
+    const events = [savedEvent('a', ['balloons-unique-purple-galaxy-balloon-garland-kit']), savedEvent('b', ['invites-16-piece-magical-party-invitations'])];
     const cleared = clearAllMemory(addManualMemory(mem, 'colour', 'gold'), '2026-10-02T00:00:00.000Z');
     expect(effectiveMemories(events, cleared)).toEqual([]);
-    const later = savedEvent('c', ['tab-purple-galaxy'], { savedAt: '2026-10-03T00:00:00.000Z' });
-    const later2 = savedEvent('d', ['bal-purple-chrome'], { savedAt: '2026-10-04T00:00:00.000Z' });
+    const later = savedEvent('c', ['bags-meteor-party-8pc-loot-gift-bags-unicorn'], { savedAt: '2026-10-03T00:00:00.000Z' });
+    const later2 = savedEvent('d', ['balloons-unique-purple-galaxy-balloon-garland-kit'], { savedAt: '2026-10-04T00:00:00.000Z' });
     expect(learnedMemories([...events, later, later2], cleared).find((m) => m.key === 'colour:purple').count).toBe(2);
   });
 
   test('profile is built from effective memories', () => {
-    const m2 = addManualMemory(addManualMemory(mem, 'colour', 'gold'), 'shopAvoid', 'Budget Bash');
+    const m2 = addManualMemory(addManualMemory(mem, 'colour', 'gold'), 'shopAvoid', 'Coles');
     const profile = profileFromMemories(effectiveMemories([], m2));
     expect(profile.colours).toEqual(['gold']);
-    expect(profile.shopsAvoid).toEqual(['Budget Bash']);
+    expect(profile.shopsAvoid).toEqual(['Coles']);
   });
 
   test('event learnings summarise choices and declines', () => {
-    const ev = savedEvent('a', ['bal-purple-chrome'], { declines: [['bal-rainbow-50', 'expensive']] });
+    const ev = savedEvent('a', ['balloons-unique-purple-galaxy-balloon-garland-kit'], { declines: [['balloons-61-piece-magical-balloon-garland-pack', 'expensive']] });
     const lines = eventLearnings(ev).join('\n');
     expect(lines).toMatch(/purple/);
     expect(lines).toMatch(/Too expensive/);
@@ -128,13 +128,13 @@ describe('AI party reviews feed memory patterns', () => {
   });
 
   test('a choice and an AI finding in the same party count once', () => {
-    const a = { ...savedEvent('a', ['bal-gold-confetti']), aiInsights: insights({ colours: ['gold'] }) };
-    const b = savedEvent('b', ['ban-gold-letters']);
+    const a = { ...savedEvent('a', ['balloons-partyrama-gold-4m-balloon-arch-kit']), aiInsights: insights({ colours: ['gold'] }) };
+    const b = savedEvent('b', ['banner-party-maker-happy-birthday-letter-banner']);
     expect(learnedMemories([a, b], mem).find((m) => m.key === 'colour:gold').count).toBe(2);
   });
 
   test('"What I learned" shows the AI summary and notes first', () => {
-    const ev = { ...savedEvent('a', ['bal-purple-chrome']), aiInsights: insights({ summary: 'A glam purple night.', notes: ['Likes a statement balloon'] }) };
+    const ev = { ...savedEvent('a', ['balloons-unique-purple-galaxy-balloon-garland-kit']), aiInsights: insights({ summary: 'A glam purple night.', notes: ['Likes a statement balloon'] }) };
     const lines = eventLearnings(ev);
     expect(lines[0]).toBe('✨ A glam purple night.');
     expect(lines[1]).toBe('✨ Likes a statement balloon');
