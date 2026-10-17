@@ -22,7 +22,7 @@ npm run lint
 ## What's built
 
 **Real products (Phase 4, part)**
-- 214 real products from Kmart, Woolworths, Coles and Officeworks. Each has its real name, price, pack size and a link to its page on the shop's website. They were found by web search on 17 Oct 2026, and nothing is made up.
+- 361 real products from Kmart, Amazon AU, Woolworths, Coles and Officeworks. Each has its real name, price, pack size and a link to its page on the shop's website. They were found by web search on 17 Oct 2026, and nothing is made up.
 - Every product shows "View at <shop>" and when its price was checked, because prices can change.
 - Things shops don't sell, like playlists, entertainers and hire services, have no suggestions. You can add your own or skip.
 
@@ -128,7 +128,7 @@ App.js                     fonts, providers, routes, responsive shell
 src/logic/engine.js        recommendation engine (pure functions, unit tested)
 src/logic/memory.js        pattern-based long-term memory (unit tested)
 src/logic/events.js        event creation and the example party
-src/data/catalog.js        REAL product catalogue: 214 products from Kmart, Woolworths, Coles and Officeworks, with links and checked prices
+src/data/catalog.js        REAL product catalogue: 361 products from Kmart, Amazon AU, Woolworths, Coles and Officeworks, with links and checked prices
 src/data/venues.js         kinds of venue, booking statuses, venue ranking
 src/data/shops.js          real Australian shops and their search links (unit tested)
 src/data/categories.js     categories, the parts of each category, vibes, event types

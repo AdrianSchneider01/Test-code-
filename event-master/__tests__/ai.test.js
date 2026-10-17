@@ -84,7 +84,8 @@ describe('engine uses AI results', () => {
       preferVibes: ['elegant'], preferColours: ['gold'], avoidColours: [], preferStyles: [], avoidStyles: [], maxPrice: null, summary: 'More elegant',
     });
     const next = suggestNext(ev, 'decorations', 'balloons', ctx).suggestion;
-    expect(next.product.id).toBe('balloons-partyrama-gold-4m-balloon-arch-kit');
+    expect(next.product.colour).toBe('gold');
+    expect(next.product.vibes).toContain('elegant');
     expect(next.reasons).toContain('As you asked: More elegant');
     const back = removeRefinement(ev, ev.refinements[0].id);
     expect(suggestNext(back, 'decorations', 'balloons', ctx).suggestion.product.id).toBe(firstId);
