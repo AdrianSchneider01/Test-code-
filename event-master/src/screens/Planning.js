@@ -21,7 +21,7 @@ import { Screen } from '../components/Screen';
 import { useSaveParty } from '../components/useSaveParty';
 import { Button, Card, Chip, Field, Gap, Grid, OptionRow, SectionTitle, Sheet, StatusPill, Stepper, T, Tag, nativeDriver, useToast } from '../components/ui';
 import { capitalise, getCategory, getSlot } from '../data/categories';
-import { getProduct } from '../data/catalog';
+import { getProduct, productsFor } from '../data/catalog';
 import {
   DECLINE_REASONS,
   REMOVE_REASONS,
@@ -461,10 +461,21 @@ export function SuggestScreen() {
         </Card>
       ) : (
         <Card>
-          <T variant="h2">I’ve run out of options for {slot.name.toLowerCase()}.</T>
-          <T muted style={{ marginTop: 8 }}>
-            You’ve seen every suggestion I have here. Add your own, or skip this one.
-          </T>
+          {productsFor(catId, slot.id).length ? (
+            <>
+              <T variant="h2">I’ve run out of options for {slot.name.toLowerCase()}.</T>
+              <T muted style={{ marginTop: 8 }}>
+                You’ve seen every suggestion I have here. Add your own, or skip this one.
+              </T>
+            </>
+          ) : (
+            <>
+              <T variant="h2">I don’t have shop products for {slot.name.toLowerCase()}.</T>
+              <T muted style={{ marginTop: 8 }}>
+                I only suggest real products from real shops, and this isn’t something they sell. Add your own, or skip this one.
+              </T>
+            </>
+          )}
         </Card>
       )}
       <View style={styles.tertiaryRow}>
