@@ -108,7 +108,8 @@ export async function connectCloud() {
       subscribe(onDocs, onDead) {
         return col.onSnapshot(
           (snap) => {
-            if (snap.metadata && snap.metadata.hasPendingWrites) return;
+            // Wait for a complete, confirmed view (the first pages can be partial).
+            if (snap.metadata && (snap.metadata.hasPendingWrites || snap.metadata.fromCache)) return;
             onDocs(snap.docs.filter((d) => d.exists).map((d) => ({ id: d.id, body: d.data() })));
           },
           () => onDead && onDead(),
