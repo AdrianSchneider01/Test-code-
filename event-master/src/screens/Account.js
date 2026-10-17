@@ -252,6 +252,7 @@ export function EventScreen() {
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 16 }}>
             <Button title="Edit event" icon="✏️" variant="secondary" size="sm" onPress={() => nav.navigate('editEvent', { eventId: event.id })} />
             <Button title="Venue planner" icon="📍" variant="secondary" size="sm" onPress={() => nav.navigate('venues', { eventId: event.id })} />
+            <Button title="Hire services" icon="🎪" variant="secondary" size="sm" onPress={() => nav.navigate('services', { eventId: event.id })} />
             {!complete ? <Button title="Continue planning" size="sm" onPress={() => nav.navigate('party', { eventId: event.id })} /> : null}
             {complete && event.status !== 'saved' ? (
               <Button

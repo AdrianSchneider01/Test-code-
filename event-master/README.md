@@ -65,6 +65,13 @@ npm run lint
 - **Event Master never checks or claims availability.** A venue shows as available only when you mark that the venue confirmed it. No venues are invented.
 - Booking a venue sets it as the event's venue, and its hire cost counts toward the budget, so booking can raise a budget alert.
 
+**Hire services planner**
+- 17 kinds of hire service, including jumping castles, face painters, entertainers, DJs, musicians, PA hire, photographers, photo booths, balloon stylists, party hire, caterers, cake makers, slushie machines and lighting.
+- Each one opens a real Google Maps search near the party's area, so it works anywhere in Australia. No businesses are listed or invented by the app.
+- You shortlist the businesses you find and track each one: Considering, Enquired, Quote received, Booked or Not available.
+- A booked service joins the plan at its quote. It counts in the budget and budget alerts, and it resolves its part of the plan (for example, a DJ resolves "Speaker / sound"). Un-booking it takes it out again.
+- The suggestion screen offers "Hire someone" for any part of the plan that has a matching service.
+
 **Plans on every device (claude.ai)**
 - On claude.ai, events, memory, saved ideas and settings sync to the viewer's private space in the artifact's database. Only that person can read it.
 - For each event the newest version wins. Deletes reach every device. Data is also kept on the device, so the app works without sync.
@@ -130,6 +137,7 @@ src/logic/memory.js        pattern-based long-term memory (unit tested)
 src/logic/events.js        event creation and the example party
 src/data/catalog.js        REAL product catalogue: 361 products from Kmart, Amazon AU, Woolworths, Coles and Officeworks, with links and checked prices
 src/data/venues.js         kinds of venue, booking statuses, venue ranking
+src/data/services.js       kinds of hire service, statuses, Google Maps search links
 src/data/shops.js          real Australian shops and their search links (unit tested)
 src/data/categories.js     categories, the parts of each category, vibes, event types
 src/state/AppState.js      app state, saved on the device with AsyncStorage

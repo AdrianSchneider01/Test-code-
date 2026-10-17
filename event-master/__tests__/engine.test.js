@@ -458,3 +458,66 @@ describe('venues', () => {
     expect(E.changesNeedReview(ch)).toBe(true);
   });
 });
+
+describe('hire services', () => {
+  // eslint-disable-next-line import/first
+  const E = require('../src/logic/engine');
+  // eslint-disable-next-line import/first
+  const S = require('../src/data/services');
+  const party = () => makeEvent({ venue: { mode: 'search', name: 'Bondi' }, budget: 300, categories: ['decorations', 'activities'] });
+
+  test('every kind of service points at a real part of the plan', () => {
+    S.SERVICE_TYPES.forEach((t) => {
+      const cat = CATEGORIES.find((c) => c.id === t.category);
+      expect(cat.slots.some((s) => s.id === t.slot)).toBe(true);
+      expect(t.ask.length).toBeGreaterThan(0);
+    });
+  });
+
+  test('Google Maps search near the party area', () => {
+    const url = S.mapsSearchUrl(S.getServiceType('castle'), 'Bondi');
+    expect(url).toBe('https://www.google.com/maps/search/?api=1&query=jumping%20castle%20hire%20near%20Bondi');
+    expect(E.serviceArea(party())).toBe('Bondi');
+    expect(E.serviceArea(E.applyServiceArea(party(), ' Manly '))).toBe('Manly');
+  });
+
+  test('booking a service adds it to the plan at its quote and resolves that part', () => {
+    let ev = E.applyAddService(party(), { name: ' Bouncy Fun Co ', typeId: 'castle', quote: '$220', link: 'bouncyfun.example' });
+    const sv = E.serviceShortlist(ev)[0];
+    expect(sv).toMatchObject({ name: 'Bouncy Fun Co', quote: 220, link: 'https://bouncyfun.example', status: 'considering' });
+    expect(budgetSummary(ev).total).toBe(0);
+    ev = E.applyServiceStatus(ev, sv.id, 'booked');
+    expect(budgetSummary(ev).total).toBe(220);
+    expect(ev.items[0]).toMatchObject({ service: true, category: 'activities', slot: 'activity', name: 'Bouncy Fun Co' });
+    expect(categoryProgress(ev, 'activities').resolved).toBe(1);
+    // A new quote updates the plan; un-booking takes it out again.
+    ev = E.applyUpdateService(ev, sv.id, { quote: '250' });
+    expect(budgetSummary(ev).total).toBe(250);
+    ev = E.applyServiceStatus(ev, sv.id, 'quoted');
+    expect(ev.items).toHaveLength(0);
+  });
+
+  test('booking a DJ adds music to the party if it was not chosen', () => {
+    let ev = E.applyAddService(party(), { name: 'DJ Sam', typeId: 'dj', quote: '400' });
+    ev = E.applyServiceStatus(ev, E.serviceShortlist(ev)[0].id, 'booked');
+    expect(ev.categories).toContain('music');
+  });
+
+  test('booking can push the party over budget and the alert names it', () => {
+    let ev = E.applyAddService(party(), { name: 'Big Band', typeId: 'musician', quote: '350' });
+    const after = E.applyServiceStatus(ev, E.serviceShortlist(ev)[0].id, 'booked');
+    const alert = findBudgetAlert([ev], [after]);
+    expect(alert.type).toBe('over');
+    expect(alert.causeName).toBe('Big Band');
+  });
+
+  test('removing the booked service from the plan un-books it but keeps it shortlisted', () => {
+    let ev = E.applyAddService(party(), { name: 'Paint Pals', typeId: 'facepaint', quote: '150' });
+    const id = E.serviceShortlist(ev)[0].id;
+    ev = E.applyServiceStatus(ev, id, 'booked');
+    ev = E.applyRemove(ev, ev.items[0].id, 'changed_mind');
+    expect(ev.items).toHaveLength(0);
+    expect(E.serviceShortlist(ev)[0].status).toBe('quoted');
+    expect(E.applyRemoveService(E.applyServiceStatus(ev, id, 'booked'), id).items).toHaveLength(0);
+  });
+});

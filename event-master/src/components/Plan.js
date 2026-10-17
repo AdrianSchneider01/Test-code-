@@ -176,7 +176,7 @@ export function ItemRow({ item, onPress, showLink = true }) {
         <T variant="small" muted numberOfLines={1}>
           Qty {item.qty}
           {item.packLabel ? ` × ${item.packLabel}` : ''} · {money(item.unitPrice)} each
-          {item.retailer ? ` · ${item.retailer}` : item.custom ? ' · Your own item' : ''}
+          {item.retailer ? ` · ${item.retailer}` : item.service ? ' · Booked service' : item.custom ? ' · Your own item' : ''}
         </T>
         {showLink ? <ViewProductLink url={item.url} productId={item.productId} compact /> : null}
       </View>

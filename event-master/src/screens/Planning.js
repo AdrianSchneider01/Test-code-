@@ -22,6 +22,7 @@ import { useSaveParty } from '../components/useSaveParty';
 import { Button, Card, Chip, Field, Gap, Grid, OptionRow, SectionTitle, Sheet, StatusPill, Stepper, T, Tag, nativeDriver, useToast } from '../components/ui';
 import { capitalise, getCategory, getSlot } from '../data/categories';
 import { getProduct, productsFor } from '../data/catalog';
+import { serviceTypesForSlot } from '../data/services';
 import {
   DECLINE_REASONS,
   REMOVE_REASONS,
@@ -102,6 +103,14 @@ export function PartyPlanScreen() {
             title={event.venue && event.venue.mode === 'search' ? 'Find a venue' : 'Venue planner'}
             onPress={() => nav.navigate('venues', { eventId: event.id })}
             style={{ alignSelf: 'flex-start', paddingHorizontal: 0, marginTop: 8 }}
+          />
+          <Button
+            variant="tertiary"
+            size="sm"
+            icon="🎪"
+            title="Hire services"
+            onPress={() => nav.navigate('services', { eventId: event.id })}
+            style={{ alignSelf: 'flex-start', paddingHorizontal: 0 }}
           />
         </Card>
         <Card>
@@ -472,7 +481,7 @@ export function SuggestScreen() {
             <>
               <T variant="h2">I don’t have shop products for {slot.name.toLowerCase()}.</T>
               <T muted style={{ marginTop: 8 }}>
-                I only suggest real products from real shops, and this isn’t something they sell. Add your own, or skip this one.
+                I only suggest real products from real shops, and this isn’t something they sell. Add your own, hire someone, or skip this one.
               </T>
             </>
           )}
@@ -481,6 +490,9 @@ export function SuggestScreen() {
       <View style={styles.tertiaryRow}>
         {ai.enabled ? <Button variant="tertiary" title="Ask Event Master" icon="✨" onPress={() => setAskOpen(true)} /> : null}
         <Button variant="tertiary" title="I already have one" icon="✏️" onPress={ownItem} />
+        {!replaceItem && serviceTypesForSlot(catId, slot.id).length ? (
+          <Button variant="tertiary" title="Hire someone" icon="🎪" onPress={() => nav.navigate('services', { eventId: event.id, categoryId: catId, slotId: slot.id })} />
+        ) : null}
         {replaceItem ? (
           <Button variant="tertiary" title="Keep current item" onPress={nav.back} />
         ) : (
@@ -623,7 +635,7 @@ export function ItemScreen() {
             </T>
             <T muted center style={{ marginTop: 4 }}>
               {slot ? slot.name : ''}
-              {item.retailer ? ` · ${item.retailer}` : item.custom ? ' · Your own item' : ''}
+              {item.retailer ? ` · ${item.retailer}` : item.service ? ' · Booked service' : item.custom ? ' · Your own item' : ''}
             </T>
           </View>
           <View style={[styles.rowBetween, { marginTop: 22 }]}>

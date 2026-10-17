@@ -5,6 +5,7 @@
 
 import { getCategory, getSlot, vibeLabel } from '../data/categories';
 import { CATALOG, getProduct } from '../data/catalog';
+import { getServiceType } from '../data/services';
 import { round2, uid } from './util';
 
 // ── Colour compatibility ─────────────────────────────────────────────────────
@@ -496,7 +497,11 @@ export const REMOVE_REASONS = [
 export function applyRemove(event, itemId, reason) {
   const old = event.items.find((i) => i.id === itemId);
   if (!old) return event;
-  const next = { ...event, items: event.items.filter((i) => i.id !== itemId) };
+  let next = { ...event, items: event.items.filter((i) => i.id !== itemId) };
+  // Removing a booked service from the plan un-books it (it stays shortlisted).
+  if (old.service) {
+    next = withServices(next, serviceShortlist(next).map((sv) => (sv.id === old.serviceId ? { ...sv, status: sv.quote != null ? 'quoted' : 'considering' } : sv)));
+  }
   return reason === 'not_needed' ? applySkip(next, old.category, old.slot) : next;
 }
 
@@ -678,6 +683,99 @@ export function applyVenueStatus(event, id, status) {
   }
   const next = withShortlist(event, shortlist);
   return wasBooked ? unbook(next) : next;
+}
+
+// ── Hire services ───────────────────────────────────────────────────────────
+// A shortlist of real local businesses the user found (DJs, jumping castles…).
+// Quotes and bookings are only what the user recorded. A booked service
+// becomes an item in the plan at its quote, so it counts in the budget and
+// resolves its part of the plan (e.g. a DJ resolves "Speaker / sound").
+export function serviceShortlist(event) {
+  return (event.servicePlan && event.servicePlan.shortlist) || [];
+}
+
+export function serviceArea(event) {
+  if (event.servicePlan && event.servicePlan.area) return event.servicePlan.area;
+  if (event.venuePlan && event.venuePlan.area) return event.venuePlan.area;
+  return event.venue && event.venue.mode === 'search' ? event.venue.name || '' : '';
+}
+
+export function applyServiceArea(event, area) {
+  return { ...event, servicePlan: { ...(event.servicePlan || {}), shortlist: serviceShortlist(event), area: (area || '').trim() } };
+}
+
+function cleanService(data) {
+  const n = Number(String(data.quote ?? '').replace(/[^0-9.]/g, ''));
+  const url = (data.link || '').trim();
+  return {
+    name: (data.name || '').trim(),
+    typeId: getServiceType(data.typeId) ? data.typeId : null,
+    quote: String(data.quote ?? '').trim() !== '' && Number.isFinite(n) && n >= 0 ? round2(n) : null,
+    link: url ? (/^https?:\/\//i.test(url) ? url : `https://${url}`) : '',
+    contact: (data.contact || '').trim(),
+    notes: (data.notes || '').trim(),
+  };
+}
+
+function serviceItem(sv, existing) {
+  const type = getServiceType(sv.typeId);
+  return {
+    ...(existing || { id: uid('item'), qty: 1, notes: '' }),
+    productId: null,
+    custom: true,
+    service: true,
+    serviceId: sv.id,
+    category: type.category,
+    slot: type.slot,
+    name: sv.name,
+    emoji: type.emoji,
+    colour: null,
+    style: null,
+    retailer: null,
+    url: sv.link || null,
+    packLabel: type.name,
+    unitPrice: sv.quote || 0,
+  };
+}
+
+// Keeps the plan's service items in step with the booked services.
+function withServices(event, shortlist, extra = {}) {
+  const next = { ...event, servicePlan: { ...(event.servicePlan || {}), shortlist, ...extra } };
+  const booked = shortlist.filter((sv) => sv.status === 'booked' && getServiceType(sv.typeId));
+  const items = [];
+  event.items.forEach((i) => {
+    if (!i.service) return items.push(i);
+    const sv = booked.find((b) => b.id === i.serviceId);
+    if (sv) items.push(serviceItem(sv, i));
+  });
+  booked.forEach((sv) => {
+    if (!items.some((i) => i.serviceId === sv.id)) items.push(serviceItem(sv));
+  });
+  const cats = [...(event.categories || [])];
+  let skipped = event.skipped || [];
+  booked.forEach((sv) => {
+    const t = getServiceType(sv.typeId);
+    if (!cats.includes(t.category)) cats.push(t.category);
+    skipped = skipped.filter((k) => k !== slotKey(t.category, t.slot));
+  });
+  return { ...next, items, categories: cats, skipped };
+}
+
+export function applyAddService(event, data) {
+  const sv = { id: uid('svc'), status: 'considering', ...cleanService(data) };
+  return withServices(event, [...serviceShortlist(event), sv]);
+}
+
+export function applyUpdateService(event, id, data) {
+  return withServices(event, serviceShortlist(event).map((sv) => (sv.id === id ? { ...sv, ...cleanService({ ...sv, ...data }) } : sv)));
+}
+
+export function applyRemoveService(event, id) {
+  return withServices(event, serviceShortlist(event).filter((sv) => sv.id !== id));
+}
+
+export function applyServiceStatus(event, id, status) {
+  return withServices(event, serviceShortlist(event).map((sv) => (sv.id === id ? { ...sv, status } : sv)));
 }
 
 // Compares two versions of the event list and returns the first budget alert.

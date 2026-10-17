@@ -24,6 +24,7 @@ import {
   ExploreScreen,
 } from './src/screens/Explore';
 import { MemoryPromptScreen, SplashScreen, WelcomeScreen } from './src/screens/Intro';
+import { ServicesScreen } from './src/screens/Services';
 import { VenuesScreen } from './src/screens/Venues';
 import { ItemScreen, OwnItemScreen, PartyPlanScreen, ReadyScreen, SuggestScreen } from './src/screens/Planning';
 import { AppStateProvider } from './src/state/AppState';
@@ -56,6 +57,7 @@ const ROUTES = {
   profile: ProfileScreen,
   ideas: SavedIdeasScreen,
   venues: VenuesScreen,
+  services: ServicesScreen,
 };
 
 function Router() {
