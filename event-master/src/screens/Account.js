@@ -746,7 +746,7 @@ export function ProfileScreen() {
             <T variant="bodyBold">✨ Use AI features</T>
             <T variant="small" muted>
               {ai.available
-                ? 'Helps me understand your words: feedback, requests, vibes and style descriptions. What you type and basic event details (type, vibe, guests, budget — never names or venues) are sent to Event Master’s server and Anthropic’s Claude.'
+                ? 'Helps me understand your words and pick the best fit for each suggestion. What you type and basic event details (type, vibe, guests, budget — never names or venues) are sent to Claude. On claude.ai this uses your own Claude account, and you’ll be asked to allow it the first time.'
                 : 'AI isn’t connected for this app yet, so I’m using built-in rules.'}
             </T>
           </View>

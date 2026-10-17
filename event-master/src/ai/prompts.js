@@ -66,3 +66,16 @@ Task: suggest 5 creative ideas for the party described in "event": a mix of them
 Ideas are inspiration only: never name specific products, shops, brands or prices.
 Each idea: emoji (a single emoji), title (max 5 words), text (one sentence), category (the planning category it belongs to).`,
 };
+
+// One self-contained prompt for hosts that take a single text input (the
+// claude.ai "sample" capability has no system prompt): instructions, the
+// exact JSON shape wanted, then the app's data.
+export function buildPrompt(task, input, schema) {
+  return `${PROMPTS[task]}
+
+Reply with only one JSON object matching this JSON Schema (no other text):
+${JSON.stringify(schema)}
+
+The app's data (JSON):
+${JSON.stringify(input)}`;
+}

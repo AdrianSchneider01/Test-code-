@@ -175,3 +175,16 @@ describe('AI product pick', () => {
     expect(pickKey(ev, 'decorations', 'balloons', buildPickInput(ev, 'decorations', 'balloons', ranked))).toBe(k1);
   });
 });
+
+describe('single-prompt form (claude.ai sample capability)', () => {
+  test('prompt carries the task instructions, the exact schema and the data', () => {
+    // eslint-disable-next-line import/first
+    const { PROMPTS, buildPrompt } = require('../src/ai/prompts');
+    const input = { note: 'too bright', product: { name: 'Pink Balloon Set', colour: 'pink', style: 'cute', retailer: 'Party Lane', lineTotal: 10 } };
+    const prompt = buildPrompt('feedback', input, TASKS.feedback.schema);
+    expect(prompt.startsWith(PROMPTS.feedback)).toBe(true);
+    expect(prompt).toContain(JSON.stringify(TASKS.feedback.schema));
+    expect(prompt).toContain(JSON.stringify(input));
+    Object.keys(TASKS).forEach((t) => expect(PROMPTS[t]).toBeTruthy());
+  });
+});

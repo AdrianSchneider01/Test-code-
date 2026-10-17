@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
-import { checkAI } from '../ai/client';
+import { checkAI, onAIUnavailable } from '../ai/client';
 import { findBudgetAlert } from '../logic/engine';
 import { DEFAULT_MEMORY, effectiveMemories, profileFromMemories } from '../logic/memory';
 import { uid } from '../logic/util';
@@ -36,8 +36,10 @@ export function AppStateProvider({ children }) {
   useEffect(() => {
     let alive = true;
     checkAI().then((ok) => alive && setAiAvailable(ok));
+    const off = onAIUnavailable(() => alive && setAiAvailable(false));
     return () => {
       alive = false;
+      off();
     };
   }, []);
 

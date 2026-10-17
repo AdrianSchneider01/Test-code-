@@ -9,7 +9,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 
 import { TASKS, sanitizeOutput, validateInput } from '../../src/ai/contract.js';
-import { PROMPTS } from './prompts.js';
+import { PROMPTS } from '../../src/ai/prompts.js';
 
 export const MODEL = 'claude-opus-5-5';
 const MAX_BODY_BYTES = 24 * 1024;

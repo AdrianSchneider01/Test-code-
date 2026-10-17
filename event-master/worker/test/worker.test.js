@@ -2,7 +2,7 @@ import { describe, expect, test } from 'vitest';
 
 import { TASKS } from '../../src/ai/contract.js';
 import worker, { MODEL, handleApi } from '../src/index.js';
-import { PROMPTS } from '../src/prompts.js';
+import { PROMPTS } from '../../src/ai/prompts.js';
 
 const ENV = { ANTHROPIC_API_KEY: 'test-key', ALLOWED_ORIGINS: 'http://localhost:8081' };
 
