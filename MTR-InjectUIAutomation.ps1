@@ -123,6 +123,18 @@ namespace MTR
         [DllImport("Wtsapi32.dll", SetLastError = true)]
         public static extern bool WTSQueryUserToken(uint SessionId, out IntPtr phToken);
 
+        [DllImport("Wtsapi32.dll", SetLastError = true)]
+        public static extern bool WTSEnumerateSessions(
+            IntPtr hServer,
+            uint   Reserved,
+            uint   Version,
+            out IntPtr ppSessionInfo,
+            out uint   pCount
+        );
+
+        [DllImport("Wtsapi32.dll")]
+        public static extern void WTSFreeMemory(IntPtr pMemory);
+
         // Advapi32
         [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
         public static extern bool CreateProcessAsUser(
@@ -139,24 +151,29 @@ namespace MTR
             out PROCESS_INFORMATION lpProcessInformation
         );
 
-        [DllImport("userenv.dll", SetLastError = true)]
-        public static extern bool CreateEnvironmentBlock(
-            out IntPtr lpEnvironment,
-            IntPtr hToken,
-            bool   bInherit
+        [DllImport("advapi32.dll", SetLastError = true)]
+        public static extern bool OpenProcessToken(
+            IntPtr ProcessHandle,
+            uint   DesiredAccess,
+            out IntPtr TokenHandle
         );
 
-        [DllImport("userenv.dll", SetLastError = true)]
-        public static extern bool DestroyEnvironmentBlock(IntPtr lpEnvironment);
+        [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+        public static extern bool LookupPrivilegeValue(
+            string lpSystemName,
+            string lpName,
+            out LUID lpLuid
+        );
 
-        [DllImport("kernel32.dll", SetLastError = true)]
-        public static extern bool CloseHandle(IntPtr hObject);
-
-        [DllImport("kernel32.dll", SetLastError = true)]
-        public static extern uint WaitForSingleObject(IntPtr hHandle, uint dwMilliseconds);
-
-        [DllImport("kernel32.dll", SetLastError = true)]
-        public static extern bool GetExitCodeProcess(IntPtr hProcess, out uint lpExitCode);
+        [DllImport("advapi32.dll", SetLastError = true)]
+        public static extern bool AdjustTokenPrivileges(
+            IntPtr TokenHandle,
+            bool   DisableAllPrivileges,
+            ref TOKEN_PRIVILEGES NewState,
+            uint   BufferLength,
+            IntPtr PreviousState,
+            IntPtr ReturnLength
+        );
 
         [DllImport("advapi32.dll", SetLastError = true)]
         public static extern bool DuplicateTokenEx(
@@ -168,14 +185,63 @@ namespace MTR
             out IntPtr phNewToken
         );
 
-        public const uint MAXIMUM_ALLOWED           = 0x02000000;
-        public const uint CREATE_UNICODE_ENVIRONMENT = 0x00000400;
-        public const uint NORMAL_PRIORITY_CLASS      = 0x00000020;
-        public const uint WAIT_TIMEOUT               = 0x00000102;
-        public const uint STILL_ACTIVE               = 259;
+        // Userenv
+        [DllImport("userenv.dll", SetLastError = true)]
+        public static extern bool CreateEnvironmentBlock(
+            out IntPtr lpEnvironment,
+            IntPtr hToken,
+            bool   bInherit
+        );
+
+        [DllImport("userenv.dll", SetLastError = true)]
+        public static extern bool DestroyEnvironmentBlock(IntPtr lpEnvironment);
+
+        // Kernel32
+        [DllImport("kernel32.dll", SetLastError = true)]
+        public static extern bool CloseHandle(IntPtr hObject);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        public static extern uint WaitForSingleObject(IntPtr hHandle, uint dwMilliseconds);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        public static extern bool GetExitCodeProcess(IntPtr hProcess, out uint lpExitCode);
+
+        [DllImport("kernel32.dll")]
+        public static extern IntPtr GetCurrentProcess();
+
+        // Constants
+        public const uint MAXIMUM_ALLOWED            = 0x02000000;
+        public const uint CREATE_UNICODE_ENVIRONMENT  = 0x00000400;
+        public const uint NORMAL_PRIORITY_CLASS       = 0x00000020;
+        public const uint WAIT_TIMEOUT                = 0x00000102;
+        public const uint STILL_ACTIVE                = 259;
+        public const uint TOKEN_ADJUST_PRIVILEGES     = 0x0020;
+        public const uint TOKEN_QUERY                 = 0x0008;
+        public const uint SE_PRIVILEGE_ENABLED        = 0x00000002;
+        public const int  WTSActive                   = 0;
 
         public const int SecurityImpersonation = 2;
         public const int TokenPrimary          = 1;
+
+        // Structures
+        [StructLayout(LayoutKind.Sequential)]
+        public struct LUID { public uint LowPart; public int HighPart; }
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct TOKEN_PRIVILEGES
+        {
+            public uint PrivilegeCount;
+            public LUID Luid;
+            public uint Attributes;
+        }
+
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+        public struct WTS_SESSION_INFO
+        {
+            public uint   SessionId;
+            public string pWinStationName;
+            public int    State;
+        }
 
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
         public struct STARTUPINFO
@@ -204,11 +270,77 @@ namespace MTR
         }
 
         /// <summary>
+        /// Enables SeTcbPrivilege in the current process token.
+        /// Required before WTSQueryUserToken even for SYSTEM.
+        /// </summary>
+        public static void EnableTcbPrivilege()
+        {
+            IntPtr hToken = IntPtr.Zero;
+            try
+            {
+                if (!OpenProcessToken(GetCurrentProcess(),
+                        TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, out hToken))
+                    return;
+
+                LUID luid;
+                if (!LookupPrivilegeValue(null, "SeTcbPrivilege", out luid))
+                    return;
+
+                var tp = new TOKEN_PRIVILEGES
+                {
+                    PrivilegeCount = 1,
+                    Luid           = luid,
+                    Attributes     = SE_PRIVILEGE_ENABLED
+                };
+                AdjustTokenPrivileges(hToken, false, ref tp,
+                    (uint)Marshal.SizeOf(tp), IntPtr.Zero, IntPtr.Zero);
+            }
+            finally
+            {
+                if (hToken != IntPtr.Zero) CloseHandle(hToken);
+            }
+        }
+
+        /// <summary>
+        /// Returns the first active interactive session ID, or uint.MaxValue if none found.
+        /// </summary>
+        public static uint FindActiveSession()
+        {
+            IntPtr pSessions = IntPtr.Zero;
+            uint   count     = 0;
+            try
+            {
+                if (!WTSEnumerateSessions(IntPtr.Zero, 0, 1, out pSessions, out count))
+                    return uint.MaxValue;
+
+                int size = Marshal.SizeOf(typeof(WTS_SESSION_INFO));
+                for (uint i = 0; i < count; i++)
+                {
+                    var info = (WTS_SESSION_INFO)Marshal.PtrToStructure(
+                        new IntPtr(pSessions.ToInt64() + i * size),
+                        typeof(WTS_SESSION_INFO));
+
+                    // WTSActive == 0, skip session 0 (services)
+                    if (info.State == WTSActive && info.SessionId > 0)
+                        return info.SessionId;
+                }
+                return uint.MaxValue;
+            }
+            finally
+            {
+                if (pSessions != IntPtr.Zero) WTSFreeMemory(pSessions);
+            }
+        }
+
+        /// <summary>
         /// Spawns commandLine in the user session identified by sessionId.
         /// Returns the Win32 exit code of the launched process, or throws on error.
         /// </summary>
         public static uint SpawnInUserSession(uint sessionId, string commandLine, uint timeoutMs)
         {
+            // Enable SeTcbPrivilege before WTSQueryUserToken
+            EnableTcbPrivilege();
+
             IntPtr userToken    = IntPtr.Zero;
             IntPtr primaryToken = IntPtr.Zero;
             IntPtr envBlock     = IntPtr.Zero;
@@ -216,8 +348,12 @@ namespace MTR
             try
             {
                 if (!WTSQueryUserToken(sessionId, out userToken))
-                    throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error(),
-                        "WTSQueryUserToken failed for session " + sessionId);
+                {
+                    int err = Marshal.GetLastWin32Error();
+                    throw new System.ComponentModel.Win32Exception(err,
+                        string.Format("WTSQueryUserToken failed for session {0} (Win32 error {1})",
+                            sessionId, err));
+                }
 
                 if (!DuplicateTokenEx(userToken, MAXIMUM_ALLOWED, IntPtr.Zero,
                         SecurityImpersonation, TokenPrimary, out primaryToken))
@@ -250,8 +386,11 @@ namespace MTR
                 );
 
                 if (!created)
-                    throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error(),
-                        "CreateProcessAsUser failed");
+                {
+                    int err = Marshal.GetLastWin32Error();
+                    throw new System.ComponentModel.Win32Exception(err,
+                        string.Format("CreateProcessAsUser failed (Win32 error {0})", err));
+                }
 
                 CloseHandle(pi.hThread);
 
@@ -302,27 +441,10 @@ if (-not (Test-Path $HelperScriptPath)) {
 # ---------------------------------------------------------------------------
 Write-Log "Enumerating active Windows sessions..."
 
-$sessionId = $null
+$sessionId = [MTR.SessionBridge]::FindActiveSession()
 
-try {
-    $qwinsta = & qwinsta 2>&1
-    foreach ($line in $qwinsta) {
-        if ($line -match '\bSkype\b' -and $line -match '\bActive\b') {
-            foreach ($part in ($line.Trim() -split '\s+')) {
-                if ($part -match '^\d+$') {
-                    $sessionId = [uint32]$part
-                    break
-                }
-            }
-        }
-    }
-} catch {
-    Write-Log "qwinsta failed: $_" "WARN"
-}
-
-# Final fallback: Session 1 is always the first interactive session on a single-user MTR
-if ($null -eq $sessionId) {
-    Write-Log "Could not auto-detect Skype session; defaulting to Session 1." "WARN"
+if ($sessionId -eq [uint32]::MaxValue) {
+    Write-Log "FindActiveSession found no active interactive session; defaulting to Session 1." "WARN"
     $sessionId = [uint32]1
 }
 
