@@ -76,9 +76,9 @@ param(
     [string]$LeaveButtonName          = "Leave",
     # ---------------------------------------------------------------------------
 
-    [int]$JoinTimeoutSeconds          = 15,
+    [int]$JoinTimeoutSeconds          = 60,
     [int]$CallDurationSeconds         = 30,
-    [string]$TeamsWindowTitle         = "Microsoft Teams Rooms"
+    [string]$TeamsWindowTitle         = "MTR"
 )
 
 Set-StrictMode -Version Latest
