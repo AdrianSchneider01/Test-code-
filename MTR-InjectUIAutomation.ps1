@@ -315,6 +315,36 @@ namespace MTR
         /// Falls back to the first active non-zero, non-current session, then any
         /// active non-zero session. Returns uint.MaxValue if nothing is found.
         /// </summary>
+        // WTSDisconnected = 4 (session alive but console taken by another user)
+        private const int WTSDisconnected = 4;
+
+        /// <summary>
+        /// Returns session enumeration info as a pipe-delimited string for logging:
+        /// "id|state|user;id|state|user;..."
+        /// </summary>
+        public static string EnumerateSessionsInfo()
+        {
+            IntPtr pSessions = IntPtr.Zero; uint count = 0;
+            var sb = new System.Text.StringBuilder();
+            try
+            {
+                if (!WTSEnumerateSessions(IntPtr.Zero, 0, 1, out pSessions, out count)) return "WTSEnumerateSessions failed";
+                int size = Marshal.SizeOf(typeof(WTS_SESSION_INFO));
+                for (uint i = 0; i < count; i++)
+                {
+                    var info = (WTS_SESSION_INFO)Marshal.PtrToStructure(new IntPtr(pSessions.ToInt64() + i * size), typeof(WTS_SESSION_INFO));
+                    IntPtr pUser = IntPtr.Zero; uint pBytes = 0;
+                    string user = "";
+                    if (WTSQuerySessionInformation(IntPtr.Zero, info.SessionId, 5, out pUser, out pBytes) && pUser != IntPtr.Zero)
+                    { user = Marshal.PtrToStringUni(pUser); WTSFreeMemory(pUser); }
+                    if (sb.Length > 0) sb.Append(";");
+                    sb.AppendFormat("{0}|{1}|{2}", info.SessionId, info.State, user);
+                }
+            }
+            finally { if (pSessions != IntPtr.Zero) WTSFreeMemory(pSessions); }
+            return sb.ToString();
+        }
+
         public static uint FindActiveSession()
         {
             IntPtr pSessions = IntPtr.Zero;
@@ -325,59 +355,43 @@ namespace MTR
                     return uint.MaxValue;
 
                 uint currentSession = 0;
-                // WTSQuerySessionInformation with WTSSessionId (14) for current session
                 IntPtr pBuf = IntPtr.Zero; uint pBytes = 0;
                 if (WTSQuerySessionInformation(IntPtr.Zero, uint.MaxValue, 14, out pBuf, out pBytes) && pBuf != IntPtr.Zero)
-                {
-                    currentSession = (uint)Marshal.ReadInt32(pBuf);
-                    WTSFreeMemory(pBuf);
-                }
+                { currentSession = (uint)Marshal.ReadInt32(pBuf); WTSFreeMemory(pBuf); }
 
-                int  size        = Marshal.SizeOf(typeof(WTS_SESSION_INFO));
-                uint skypeMatch  = uint.MaxValue;
-                uint firstActive = uint.MaxValue;
+                int  size                  = Marshal.SizeOf(typeof(WTS_SESSION_INFO));
+                uint skypeActive           = uint.MaxValue; // Skype user + WTSActive
+                uint skypeDisconnected     = uint.MaxValue; // Skype user + WTSDisconnected
+                uint otherActive           = uint.MaxValue; // non-current WTSActive
+                uint otherDisconnected     = uint.MaxValue; // non-current WTSDisconnected
 
                 for (uint i = 0; i < count; i++)
                 {
                     var info = (WTS_SESSION_INFO)Marshal.PtrToStructure(
-                        new IntPtr(pSessions.ToInt64() + i * size),
-                        typeof(WTS_SESSION_INFO));
+                        new IntPtr(pSessions.ToInt64() + i * size), typeof(WTS_SESSION_INFO));
 
-                    if (info.State != WTSActive || info.SessionId == 0) continue;
+                    if (info.SessionId == 0) continue;
+                    bool isActive       = info.State == WTSActive;
+                    bool isDisconnected = info.State == WTSDisconnected;
+                    if (!isActive && !isDisconnected) continue;
 
-                    // Get the username for this session
                     IntPtr pUser = IntPtr.Zero; uint pUserBytes = 0;
                     string userName = "";
                     if (WTSQuerySessionInformation(IntPtr.Zero, info.SessionId, 5, out pUser, out pUserBytes) && pUser != IntPtr.Zero)
-                    {
-                        userName = Marshal.PtrToStringUni(pUser);
-                        WTSFreeMemory(pUser);
-                    }
+                    { userName = Marshal.PtrToStringUni(pUser); WTSFreeMemory(pUser); }
 
-                    // Prefer the Skype user session
-                    if (userName.IndexOf("Skype", System.StringComparison.OrdinalIgnoreCase) >= 0)
-                    {
-                        skypeMatch = info.SessionId;
-                        break;
-                    }
+                    bool isSkype = userName.IndexOf("Skype", System.StringComparison.OrdinalIgnoreCase) >= 0;
 
-                    // First active session that isn't the current (admin) session
-                    if (firstActive == uint.MaxValue && info.SessionId != currentSession)
-                        firstActive = info.SessionId;
+                    if (isSkype && isActive       && skypeActive       == uint.MaxValue) skypeActive       = info.SessionId;
+                    if (isSkype && isDisconnected && skypeDisconnected  == uint.MaxValue) skypeDisconnected = info.SessionId;
+                    if (!isSkype && isActive       && info.SessionId != currentSession && otherActive       == uint.MaxValue) otherActive       = info.SessionId;
+                    if (!isSkype && isDisconnected && info.SessionId != currentSession && otherDisconnected == uint.MaxValue) otherDisconnected = info.SessionId;
                 }
 
-                if (skypeMatch  != uint.MaxValue) return skypeMatch;
-                if (firstActive != uint.MaxValue) return firstActive;
-
-                // Last resort: first active non-zero session (may be current)
-                for (uint i = 0; i < count; i++)
-                {
-                    var info = (WTS_SESSION_INFO)Marshal.PtrToStructure(
-                        new IntPtr(pSessions.ToInt64() + i * size),
-                        typeof(WTS_SESSION_INFO));
-                    if (info.State == WTSActive && info.SessionId > 0)
-                        return info.SessionId;
-                }
+                if (skypeActive       != uint.MaxValue) return skypeActive;
+                if (skypeDisconnected != uint.MaxValue) return skypeDisconnected;
+                if (otherActive       != uint.MaxValue) return otherActive;
+                if (otherDisconnected != uint.MaxValue) return otherDisconnected;
                 return uint.MaxValue;
             }
             finally
@@ -494,11 +508,13 @@ if (-not (Test-Path $HelperScriptPath)) {
 # 2. Find the Skype user's active session ID
 # ---------------------------------------------------------------------------
 Write-Log "Enumerating active Windows sessions..."
+$sessionInfo = [MTR.SessionBridge]::EnumerateSessionsInfo()
+Write-Log "Sessions (id|state|user): $sessionInfo"
 
 $sessionId = [MTR.SessionBridge]::FindActiveSession()
 
 if ($sessionId -eq [uint32]::MaxValue) {
-    Write-Log "FindActiveSession found no active interactive session; defaulting to Session 1." "WARN"
+    Write-Log "FindActiveSession found no suitable session; defaulting to Session 1." "WARN"
     $sessionId = [uint32]1
 }
 
