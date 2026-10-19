@@ -76,7 +76,7 @@ param(
     [string]$LeaveButtonName          = "Leave",
     # ---------------------------------------------------------------------------
 
-    [int]$JoinTimeoutSeconds          = 60,
+    [int]$JoinTimeoutSeconds          = 10,
     [int]$CallDurationSeconds         = 30,
     [string]$TeamsWindowTitle         = "MTR"
 )
@@ -237,6 +237,24 @@ function Find-Button {
 
         Start-Sleep -Milliseconds 2000
     }
+
+    # Diagnostic: dump all named elements inside this window
+    Write-Log "Button not found. Dumping all named UIA elements in MTR window:" "WARN"
+    try {
+        $allCond = [System.Windows.Automation.Condition]::TrueCondition
+        $elements = $Root.FindAll($TF::Descendants, $allCond)
+        foreach ($el in $elements) {
+            try {
+                $n  = $el.Current.Name
+                $id = $el.Current.AutomationId
+                $ct = $el.Current.ControlType.ProgrammaticName
+                if ($n -or $id) {
+                    Write-Log "  [$ct] Name='$n' AutomationId='$id'" "WARN"
+                }
+            } catch {}
+        }
+    } catch { Write-Log "  UIA dump failed: $_" "WARN" }
+
     return $null
 }
 
