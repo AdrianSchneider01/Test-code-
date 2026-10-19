@@ -76,7 +76,7 @@ param(
     [string]$LeaveButtonName          = "Leave",
     # ---------------------------------------------------------------------------
 
-    [int]$JoinTimeoutSeconds          = 60,
+    [int]$JoinTimeoutSeconds          = 15,
     [int]$CallDurationSeconds         = 30,
     [string]$TeamsWindowTitle         = "Microsoft Teams Rooms"
 )
@@ -177,6 +177,22 @@ function Find-TeamsRoomsWindow {
 
         Start-Sleep -Milliseconds 2000
     }
+
+    # Diagnostic: log all visible window titles so we can find the correct one
+    Write-Log "Window not found. Dumping all visible process windows for diagnosis:" "WARN"
+    Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 } | ForEach-Object {
+        Write-Log "  PID=$($_.Id) Name=$($_.ProcessName) Title='$($_.MainWindowTitle)'" "WARN"
+    }
+    try {
+        $desktop  = $AE::RootElement
+        $allCond  = [System.Windows.Automation.Condition]::TrueCondition
+        $children = $desktop.FindAll($TF::Children, $allCond)
+        Write-Log "  UIA desktop children ($($children.Count)):" "WARN"
+        foreach ($child in $children) {
+            try { Write-Log "    UIA: Name='$($child.Current.Name)' Type=$($child.Current.ControlType.ProgrammaticName)" "WARN" } catch {}
+        }
+    } catch { Write-Log "  UIA dump failed: $_" "WARN" }
+
     return $null
 }
 
