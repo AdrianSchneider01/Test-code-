@@ -124,18 +124,18 @@ try {
     Add-Type -AssemblyName UIAutomationClient   -ErrorAction Stop
     Add-Type -AssemblyName UIAutomationTypes    -ErrorAction Stop
 } catch {
-    # Fallback: load by file path (present on all modern Windows)
-    $uiaBase = "$env:SystemRoot\System32"
-    [System.Reflection.Assembly]::LoadFrom("$uiaBase\UIAutomationClient.dll")  | Out-Null
-    [System.Reflection.Assembly]::LoadFrom("$uiaBase\UIAutomationTypes.dll")   | Out-Null
+    # Fallback: load by explicit .NET Framework path
+    $fxBase = "$env:SystemRoot\Microsoft.NET\Framework64\v4.0.30319"
+    [System.Reflection.Assembly]::LoadFrom("$fxBase\UIAutomationClient.dll")  | Out-Null
+    [System.Reflection.Assembly]::LoadFrom("$fxBase\UIAutomationTypes.dll")   | Out-Null
 }
 
 # Shorthand namespace aliases
 $AE  = [System.Windows.Automation.AutomationElement]
 $TF  = [System.Windows.Automation.TreeScope]
 $PC  = [System.Windows.Automation.PropertyCondition]
-$ACC = [System.Windows.Automation.AutomationIdProperty]
-$NAM = [System.Windows.Automation.NameProperty]
+$ACC = [System.Windows.Automation.AutomationElement]::AutomationIdProperty
+$NAM = [System.Windows.Automation.AutomationElement]::NameProperty
 $IPP = [System.Windows.Automation.InvokePattern]::Pattern
 
 # ---------------------------------------------------------------------------
