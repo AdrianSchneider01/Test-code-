@@ -81,7 +81,7 @@ param(
     [string]$ResultFile           = "C:\MTR\TestCallResult.json",
     [int]   $HelperTimeoutSeconds = 180,
 
-    # SMTP / email (all optional — skip email if SmtpServer is empty)
+    # SMTP / email (all optional - skip email if SmtpServer is empty)
     [string]$SmtpServer   = "",
     [int]   $SmtpPort     = 587,
     [string]$SmtpUser     = "",
@@ -375,12 +375,12 @@ $testResult = $null
 if (Test-Path $ResultFile) {
     try {
         $testResult = Get-Content $ResultFile -Raw | ConvertFrom-Json
-        Write-Log "Test result: $($testResult.Status) — $($testResult.Message)"
+        Write-Log "Test result: $($testResult.Status) - $($testResult.Message)"
     } catch {
         Write-Log "Failed to parse result file: $_" "WARN"
     }
 } else {
-    Write-Log "Result file not found after helper exit — call may have failed silently." "WARN"
+    Write-Log "Result file not found after helper exit - call may have failed silently." "WARN"
 }
 
 $callStatus   = if ($testResult) { $testResult.Status  } else { "UNKNOWN" }
@@ -402,7 +402,7 @@ if ($SmtpServer -and $SmtpUser -and $SmtpPassword -and $MailFrom -and $MailTo) {
 
     $htmlBody = @"
 <!DOCTYPE html><html><body style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;color:#333">
-<h2 style="color:#0078d4">MTR Test Call Report — $RoomName</h2>
+<h2 style="color:#0078d4">MTR Test Call Report - $RoomName</h2>
 <table style="border-collapse:collapse;width:600px">
   <tr><td style="padding:6px 12px;font-weight:bold;background:#f5f5f5;width:180px">Room</td>
       <td style="padding:6px 12px">$RoomName</td></tr>
@@ -429,7 +429,7 @@ if ($SmtpServer -and $SmtpUser -and $SmtpPassword -and $MailFrom -and $MailTo) {
 
     $mail            = New-Object System.Net.Mail.MailMessage
     $mail.From       = $MailFrom
-    $mail.Subject    = "MTR Test Call [$callStatus] — $RoomName — $(Get-Date -f 'yyyy-MM-dd')"
+    $mail.Subject    = "MTR Test Call [$callStatus] - $RoomName - $(Get-Date -f 'yyyy-MM-dd')"
     $mail.Body       = $htmlBody
     $mail.IsBodyHtml = $true
     foreach ($addr in ($MailTo -split ',')) { $mail.To.Add($addr.Trim()) }
@@ -445,7 +445,7 @@ if ($SmtpServer -and $SmtpUser -and $SmtpPassword -and $MailFrom -and $MailTo) {
     }
 
 } else {
-    Write-Log "SMTP not configured — skipping email."
+    Write-Log "SMTP not configured - skipping email."
 }
 
 # ---------------------------------------------------------------------------

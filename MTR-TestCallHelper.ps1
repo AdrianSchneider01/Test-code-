@@ -6,20 +6,20 @@
 
 .DESCRIPTION
     This script is spawned by MTR-InjectUIAutomation.ps1 via CreateProcessAsUser.
-    It must NOT be run directly as SYSTEM — the Teams Rooms UWP window is only
+    It must NOT be run directly as SYSTEM - the Teams Rooms UWP window is only
     visible to UI Automation from within the same interactive session.
 
     Flow:
       1. Parse the join URL for display (informational)
       2. Load UIAutomationClient / UIAutomationTypes assemblies
       3. Find the Teams Rooms main window
-      4. Locate the "Join" button (by AutomationId or Name — configurable)
+      4. Locate the "Join" button (by AutomationId or Name - configurable)
       5. Click Join and wait for the in-call state (up to $JoinTimeoutSeconds)
       6. Wait $CallDurationSeconds inside the call
       7. Click the Leave/Hang-up button
       8. Write a result JSON to $ResultFile
 
-    IMPORTANT — AutomationId / Name values:
+    IMPORTANT - AutomationId / Name values:
       The exact AutomationId and Name for the Join and Leave buttons MUST be
       confirmed by running Microsoft's Inspect.exe (part of Windows SDK) on a
       live MTR device. The defaults below are best-effort guesses based on
@@ -69,7 +69,7 @@ param(
 
     [string]$ResultFile               = "C:\MTR\TestCallResult.json",
 
-    # ----- UI element IDs — MUST be confirmed with Inspect.exe on a live MTR -----
+    # ----- UI element IDs - MUST be confirmed with Inspect.exe on a live MTR -----
     [string]$JoinButtonAutomationId   = "JoinButton",
     [string]$JoinButtonName           = "Join",
     [string]$LeaveButtonAutomationId  = "HangupButton",
@@ -112,7 +112,7 @@ function Write-Result {
         New-Item -ItemType Directory -Path $outDir -Force | Out-Null
     }
     $result | ConvertTo-Json -Depth 4 | Set-Content -Path $ResultFile -Encoding UTF8
-    Write-Log "Result written: $Status — $Message"
+    Write-Log "Result written: $Status - $Message"
 }
 
 # ---------------------------------------------------------------------------
@@ -308,14 +308,14 @@ try {
         exit 1
     }
 
-    Write-Log "Join clicked — waiting for call to connect..."
+    Write-Log "Join clicked - waiting for call to connect..."
     Start-Sleep -Seconds 5  # brief pause for the app to transition screens
 
     # Step D: Confirm in-call by looking for Leave button
     $leaveBtn = Wait-ForInCallState -Root $teamsWindow -TimeoutSeconds $JoinTimeoutSeconds
     if (-not $leaveBtn) {
         Write-Result -Status "FAIL" `
-            -Message "Leave button not found after clicking Join — call may not have connected. " +
+            -Message "Leave button not found after clicking Join - call may not have connected. " +
                      "Check Inspect.exe for correct AutomationId/Name values."
         exit 1
     }
@@ -336,7 +336,7 @@ try {
         Invoke-UIElement -Element $leaveBtn -Label "Leave/Hangup" | Out-Null
         Write-Log "Left the call."
     } else {
-        Write-Log "Leave button not found after call duration — may have auto-ended." "WARN"
+        Write-Log "Leave button not found after call duration - may have auto-ended." "WARN"
     }
 
     Write-Result -Status "PASS" `
