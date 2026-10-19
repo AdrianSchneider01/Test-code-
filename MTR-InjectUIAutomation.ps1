@@ -135,6 +135,15 @@ namespace MTR
         [DllImport("Wtsapi32.dll")]
         public static extern void WTSFreeMemory(IntPtr pMemory);
 
+        [DllImport("Wtsapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+        public static extern bool WTSQuerySessionInformation(
+            IntPtr hServer,
+            uint   SessionId,
+            int    WTSInfoClass,   // 5 = WTSUserName
+            out IntPtr ppBuffer,
+            out uint   pBytesReturned
+        );
+
         // Advapi32
         [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
         public static extern bool CreateProcessAsUser(
@@ -302,7 +311,9 @@ namespace MTR
         }
 
         /// <summary>
-        /// Returns the first active interactive session ID, or uint.MaxValue if none found.
+        /// Returns the session ID for the Skype user (Teams Rooms kiosk account).
+        /// Falls back to the first active non-zero, non-current session, then any
+        /// active non-zero session. Returns uint.MaxValue if nothing is found.
         /// </summary>
         public static uint FindActiveSession()
         {
@@ -313,14 +324,57 @@ namespace MTR
                 if (!WTSEnumerateSessions(IntPtr.Zero, 0, 1, out pSessions, out count))
                     return uint.MaxValue;
 
-                int size = Marshal.SizeOf(typeof(WTS_SESSION_INFO));
+                uint currentSession = 0;
+                // WTSQuerySessionInformation with WTSSessionId (14) for current session
+                IntPtr pBuf = IntPtr.Zero; uint pBytes = 0;
+                if (WTSQuerySessionInformation(IntPtr.Zero, uint.MaxValue, 14, out pBuf, out pBytes) && pBuf != IntPtr.Zero)
+                {
+                    currentSession = (uint)Marshal.ReadInt32(pBuf);
+                    WTSFreeMemory(pBuf);
+                }
+
+                int  size        = Marshal.SizeOf(typeof(WTS_SESSION_INFO));
+                uint skypeMatch  = uint.MaxValue;
+                uint firstActive = uint.MaxValue;
+
                 for (uint i = 0; i < count; i++)
                 {
                     var info = (WTS_SESSION_INFO)Marshal.PtrToStructure(
                         new IntPtr(pSessions.ToInt64() + i * size),
                         typeof(WTS_SESSION_INFO));
 
-                    // WTSActive == 0, skip session 0 (services)
+                    if (info.State != WTSActive || info.SessionId == 0) continue;
+
+                    // Get the username for this session
+                    IntPtr pUser = IntPtr.Zero; uint pUserBytes = 0;
+                    string userName = "";
+                    if (WTSQuerySessionInformation(IntPtr.Zero, info.SessionId, 5, out pUser, out pUserBytes) && pUser != IntPtr.Zero)
+                    {
+                        userName = Marshal.PtrToStringUni(pUser);
+                        WTSFreeMemory(pUser);
+                    }
+
+                    // Prefer the Skype user session
+                    if (userName.IndexOf("Skype", System.StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        skypeMatch = info.SessionId;
+                        break;
+                    }
+
+                    // First active session that isn't the current (admin) session
+                    if (firstActive == uint.MaxValue && info.SessionId != currentSession)
+                        firstActive = info.SessionId;
+                }
+
+                if (skypeMatch  != uint.MaxValue) return skypeMatch;
+                if (firstActive != uint.MaxValue) return firstActive;
+
+                // Last resort: first active non-zero session (may be current)
+                for (uint i = 0; i < count; i++)
+                {
+                    var info = (WTS_SESSION_INFO)Marshal.PtrToStructure(
+                        new IntPtr(pSessions.ToInt64() + i * size),
+                        typeof(WTS_SESSION_INFO));
                     if (info.State == WTSActive && info.SessionId > 0)
                         return info.SessionId;
                 }
