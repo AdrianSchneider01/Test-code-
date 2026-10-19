@@ -312,8 +312,8 @@ try {
 
     if (-not $joinBtn) {
         Write-Result -Status "FAIL" `
-            -Message "Join button not found (AutomationId='$JoinButtonAutomationId', Name='$JoinButtonName'). " +
-                     "Confirm element IDs with Inspect.exe on a live device."
+            -Message ("Join button not found (AutomationId='$JoinButtonAutomationId', Name='$JoinButtonName'). " +
+                      "Confirm element IDs with Inspect.exe on a live device.")
         exit 1
     }
 
@@ -331,8 +331,8 @@ try {
     $leaveBtn = Wait-ForInCallState -Root $teamsWindow -TimeoutSeconds $JoinTimeoutSeconds
     if (-not $leaveBtn) {
         Write-Result -Status "FAIL" `
-            -Message "Leave button not found after clicking Join - call may not have connected. " +
-                     "Check Inspect.exe for correct AutomationId/Name values."
+            -Message ("Leave button not found after clicking Join - call may not have connected. " +
+                      "Check Inspect.exe for correct AutomationId/Name values.")
         exit 1
     }
 
