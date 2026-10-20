@@ -88,7 +88,7 @@ function Check-InCallIssues {
             if ($name -eq "Turn camera on"  -and $enabled) {
                 $issues.Add(@{ Severity="WARN"; Component="Camera";      Message="Camera is off during call" }) }
             # Mic button state
-            if ($name -eq "Unmute mic"      -and -not $enabled) {
+            if ($name -eq "Unmute mic"      -and -not $enabled -and -not ($issues | Where-Object { $_.Component -eq "Microphone" })) {
                 $issues.Add(@{ Severity="FAIL"; Component="Microphone";  Message="Microphone unavailable (button disabled)" }) }
             # Speaker button state
             if ($name -eq "Speaker is off"  -and -not $enabled) {
@@ -178,7 +178,7 @@ if (-not $joined -or -not $left) {
 $issueList = $issues | ForEach-Object { "$($_.Severity) $($_.Component): $($_.Message)" }
 $message   = if ($status -eq "PASS") { "Joined and left successfully. No issues." } `
              elseif ($status -eq "WARN") { "Joined and left. Warnings: $($issueList -join '; ')" } `
-             else { "FAIL - Join=$joined Left=$left Issues: $($issueList -join '; ')" }
+             else { "Join=$joined Left=$left Issues: $($issueList -join '; ')" }
 Write-Log "Result: $status - $message"
 
 @{
