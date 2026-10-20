@@ -13,6 +13,7 @@ Usage:
 """
 
 import asyncio
+import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -68,6 +69,14 @@ async def main():
 
     log(f"=== Run started: {ts_label} ===", run_dir)
 
+    # Kill Teams desktop so it cannot intercept the msteams:// protocol call
+    # and show its own "is calling you" popup that blocks the browser flow.
+    for exe in ["ms-teams.exe", "Teams.exe"]:
+        r = subprocess.run(["taskkill", "/F", "/IM", exe], capture_output=True)
+        if r.returncode == 0:
+            log(f"Closed Teams desktop ({exe})", run_dir)
+    await asyncio.sleep(2)
+
     async with async_playwright() as pw:
         browser = await pw.chromium.launch(
             headless=False,
@@ -110,21 +119,25 @@ async def main():
         # 1 — navigate
         log("Navigating to meeting...", run_dir)
         await page.goto(MEETING_URL, wait_until="domcontentloaded", timeout=30000)
-        await page.wait_for_timeout(3000)
+        # Wait for Teams JS to run, then press Escape to dismiss the
+        # "Open Microsoft Teams?" OS dialog if it appeared.
+        await page.wait_for_timeout(4000)
+        await page.keyboard.press("Escape")
+        await page.wait_for_timeout(1000)
         await page.screenshot(path=str(run_dir / "01_landing.png"))
 
-        # 2 — "Continue on this browser" safety fallback
-        #     (bypass_launcher usually skips this page entirely)
+        # 2 — click "Continue on this browser" if the launcher gate is showing.
+        #     Wait up to 12s so we don't race ahead before it appears.
         for sel, label in [
             ("text=Continue on this browser", "Continue on this browser"),
             ("text=Join on the web instead",  "Join on the web instead"),
         ]:
             btn = page.locator(sel).first
             try:
-                if await btn.is_visible(timeout=3000):
-                    log(f"Fallback click: {label}", run_dir)
+                if await btn.is_visible(timeout=12000):
+                    log(f"Clicking: {label}", run_dir)
                     await btn.click()
-                    await page.wait_for_timeout(2000)
+                    await page.wait_for_timeout(3000)
                     break
             except Exception:
                 pass
@@ -164,19 +177,25 @@ async def main():
                 pass
 
         # 4 — turn camera off before joining
-        # When camera is ON the button says "Turn camera off" → click it.
-        # When camera is OFF the button says "Turn camera on"  → leave it.
+        # Log the actual aria-label so we can tune the match if needed.
         for sel in ["button[aria-label*='camera' i]", "[data-tid='toggle-av']"]:
             btn = page.locator(sel).first
             try:
                 if await btn.is_visible(timeout=2000):
-                    aria = await btn.get_attribute("aria-label") or ""
-                    if "turn camera off" in aria.lower():
-                        log(f"Camera is on — turning it off ({sel})", run_dir)
+                    aria = (await btn.get_attribute("aria-label") or "").lower()
+                    log(f"Camera button aria-label: '{aria}'", run_dir)
+                    # Click if camera is currently ON (any phrasing Teams may use)
+                    camera_on_phrases = [
+                        "turn camera off", "turn off camera",
+                        "disable camera", "stop camera",
+                        "camera on", "video on",
+                    ]
+                    if any(p in aria for p in camera_on_phrases):
+                        log("Camera ON → clicking to turn off", run_dir)
                         await btn.click()
                         await page.wait_for_timeout(500)
                     else:
-                        log(f"Camera already off ({aria!r})", run_dir)
+                        log("Camera already off", run_dir)
                     break
             except Exception:
                 pass
