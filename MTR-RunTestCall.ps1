@@ -56,26 +56,35 @@ $camProc = Start-Process -FilePath $LocalPython -ArgumentList $LocalScript -Pass
 $camLive = ($camProc.ExitCode -eq 0)
 Write-Log "Camera check: $( if ($camLive) { 'LIVE ✓' } else { 'NO FEED ✗' } )"
 
-# ── 5. Read MTR-side result ───────────────────────────────────────────────────
-Write-Log "Reading MTR result..."
-$mtrResult = Invoke-Command -Session $s -ScriptBlock {
-    param($f)
-    if (Test-Path $f) { Get-Content $f -Raw } else { $null }
-} -ArgumentList "$MtrScriptDir\TestCallResult.json"
+# ── 5. Poll for MTR-side result (task may still be running) ──────────────────
+Write-Log "Waiting for MTR result file (up to 120s)..."
+$r = $null
+$deadline = (Get-Date).AddSeconds(120)
+while ((Get-Date) -lt $deadline -and -not $r) {
+    $mtrRaw = Invoke-Command -Session $s -ScriptBlock {
+        param($f) if (Test-Path $f) { Get-Content $f -Raw } else { $null }
+    } -ArgumentList "$MtrScriptDir\TestCallResult.json"
+    if ($mtrRaw) {
+        try { $r = $mtrRaw | ConvertFrom-Json } catch {}
+    }
+    if (-not $r) { Start-Sleep 5 }
+}
 
-if ($mtrResult) {
-    $r = $mtrResult | ConvertFrom-Json
+if ($r) {
     Write-Log "MTR result: $($r.Status) - $($r.Message)"
 } else {
-    Write-Log "No MTR result file found yet."
+    Write-Log "MTR result: timed out waiting for result file"
 }
 
 Remove-PSSession $s
 
 # ── 6. Summary ────────────────────────────────────────────────────────────────
-$overall = if ($camLive -and ($mtrResult -and ($mtrResult | ConvertFrom-Json).Status -ne "FAIL")) { "PASS" } else { "FAIL" }
+$mtrStatus  = if ($r) { $r.Status } else { "TIMEOUT" }
+$overall    = if ($camLive -and $mtrStatus -eq "PASS") { "PASS" } `
+              elseif ($camLive -and $mtrStatus -eq "WARN") { "WARN" } `
+              else { "FAIL" }
 Write-Log "=================================================="
-Write-Log "OVERALL: $overall  |  Camera: $( if ($camLive) {'LIVE'} else {'NO FEED'} )  |  MTR: $($r.Status)"
+Write-Log "OVERALL: $overall  |  Camera: $( if ($camLive) {'LIVE'} else {'NO FEED'} )  |  MTR: $mtrStatus"
 Write-Log "=================================================="
 
 exit $(if ($overall -eq "PASS") { 0 } else { 1 })
