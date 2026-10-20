@@ -14,16 +14,28 @@ Usage:
 
 import asyncio
 import sys
-import statistics
+from datetime import datetime
 from pathlib import Path
 from playwright.async_api import async_playwright
-from PIL import Image, ImageStat
+from PIL import Image
 
-MEETING_URL  = "https://teams.microsoft.com/meet/497737059187682?p=NnqALr74DBIi2oFvDT"
-GUEST_NAME   = "MTR-Observer"
-OUTPUT_DIR   = Path(__file__).parent / "CameraCheckOutput"
+MEETING_URL = "https://teams.microsoft.com/meet/497737059187682?p=NnqALr74DBIi2oFvDT"
+GUEST_NAME  = "MTR-Observer"
+OUTPUT_ROOT = Path(__file__).parent / "CameraCheckOutput"
+LOG_FILE    = OUTPUT_ROOT / "camera_log.txt"
 
-def log(msg): print(f"[cam-check] {msg}", flush=True)
+def log(msg, run_dir=None):
+    ts  = datetime.now().strftime("%H:%M:%S")
+    line = f"[{ts}] {msg}"
+    print(f"[cam-check] {msg}", flush=True)
+    # append to master log
+    OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
+    with open(LOG_FILE, "a", encoding="utf-8") as f:
+        f.write(line + "\n")
+    # also append to per-run log if we have a run dir
+    if run_dir:
+        with open(run_dir / "run_log.txt", "a", encoding="utf-8") as f:
+            f.write(line + "\n")
 
 def analyse_feed(image_path: Path) -> tuple[bool, str]:
     """
@@ -31,32 +43,33 @@ def analyse_feed(image_path: Path) -> tuple[bool, str]:
     The observer joins with camera OFF (avatar), so any live video must be from the MTR.
     Detects colourful / high-variance pixels — avatar tiles are near-white/grey.
     """
-    img   = Image.open(image_path).convert("RGB")
-    pixels = list(img.get_flattened_data())
+    img    = Image.open(image_path).convert("RGB")
+    pixels = list(img.getdata())
     total  = len(pixels)
 
-    # Count pixels that are "interesting": not near-grey (R≈G≈B) and not near-white
     def is_interesting(r, g, b):
         brightness = (r + g + b) / 3
-        if brightness > 230:          # near-white background
+        if brightness > 230:
             return False
-        diff = max(abs(r-g), abs(g-b), abs(r-b))
-        return diff > 30              # colourful enough to be real video
+        return max(abs(r-g), abs(g-b), abs(r-b)) > 30
 
     interesting = sum(1 for r, g, b in pixels if is_interesting(r, g, b))
     pct = 100 * interesting / total
-    log(f"Interesting pixels: {interesting}/{total} ({pct:.1f}%)")
-
     if pct < 3:
         return False, f"No live camera feed detected ({pct:.1f}% interesting pixels)"
     return True, f"Live camera feed detected ({pct:.1f}% interesting pixels)"
 
 async def main():
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    # timestamped folder for this run
+    ts_label = datetime.now().strftime("%Y-%m-%d_%H-%M")
+    run_dir  = OUTPUT_ROOT / ts_label
+    run_dir.mkdir(parents=True, exist_ok=True)
+
+    log(f"=== Run started: {ts_label} ===", run_dir)
 
     async with async_playwright() as pw:
         browser = await pw.chromium.launch(
-            headless=False,   # visible so you can watch it join
+            headless=False,
             args=[
                 "--no-sandbox",
                 "--use-fake-ui-for-media-stream",
@@ -74,10 +87,10 @@ async def main():
         page = await ctx.new_page()
 
         # 1 — navigate
-        log("Navigating to meeting...")
+        log("Navigating to meeting...", run_dir)
         await page.goto(MEETING_URL, wait_until="domcontentloaded", timeout=30000)
         await page.wait_for_timeout(4000)
-        await page.screenshot(path=str(OUTPUT_DIR / "01_landing.png"))
+        await page.screenshot(path=str(run_dir / "01_landing.png"))
 
         # 2 — choose browser join
         for sel, label in [
@@ -88,14 +101,14 @@ async def main():
             btn = page.locator(sel).first
             try:
                 if await btn.is_visible(timeout=4000):
-                    log(f"Clicking: {label}")
+                    log(f"Clicking: {label}", run_dir)
                     await btn.click()
                     break
             except Exception:
                 pass
 
-        # Wait for the pre-join page to fully render
-        log("Waiting for pre-join screen to load...")
+        # Wait for pre-join to render
+        log("Waiting for pre-join screen...", run_dir)
         for ready_sel in [
             "input[placeholder*='name' i]",
             "[data-tid='prejoin-display-name-input']",
@@ -105,12 +118,12 @@ async def main():
         ]:
             try:
                 await page.wait_for_selector(ready_sel, timeout=15000)
-                log(f"Pre-join ready (found: {ready_sel})")
+                log(f"Pre-join ready ({ready_sel})", run_dir)
                 break
             except Exception:
                 pass
         await page.wait_for_timeout(1000)
-        await page.screenshot(path=str(OUTPUT_DIR / "02_after_browser_choice.png"))
+        await page.screenshot(path=str(run_dir / "02_prejoin.png"))
 
         # 3 — enter guest name
         for sel in [
@@ -121,32 +134,26 @@ async def main():
             inp = page.locator(sel).first
             try:
                 if await inp.is_visible(timeout=4000):
-                    log(f"Typing guest name into {sel}")
+                    log(f"Typing name into {sel}", run_dir)
                     await inp.fill(GUEST_NAME)
                     await page.wait_for_timeout(500)
                     break
             except Exception:
                 pass
 
-        # 4 — turn off our own camera (we don't need to send video)
-        for sel in [
-            "button[aria-label*='camera' i]",
-            "[data-tid='toggle-av']",
-        ]:
+        # 4 — turn camera off
+        for sel in ["button[aria-label*='camera' i]", "[data-tid='toggle-av']"]:
             btn = page.locator(sel).first
             try:
                 if await btn.is_visible(timeout=2000):
                     aria = await btn.get_attribute("aria-label") or ""
-                    # only click if camera is currently ON (we want it OFF)
                     if "off" not in aria.lower():
-                        log(f"Turning our camera off: {sel}")
+                        log(f"Camera off: {sel}", run_dir)
                         await btn.click()
                         await page.wait_for_timeout(500)
                     break
             except Exception:
                 pass
-
-        await page.screenshot(path=str(OUTPUT_DIR / "03_prejoin.png"))
 
         # 5 — join
         joined = False
@@ -159,7 +166,7 @@ async def main():
             btn = page.locator(sel).first
             try:
                 if await btn.is_visible(timeout=4000):
-                    log(f"Joining via: {sel}")
+                    log(f"Joining via: {sel}", run_dir)
                     await btn.click()
                     joined = True
                     await page.wait_for_timeout(2000)
@@ -168,26 +175,24 @@ async def main():
                 pass
 
         if not joined:
-            log("ERROR: could not find Join button — check 03_prejoin.png")
+            log("ERROR: could not find Join button", run_dir)
             await browser.close()
             return False
 
-        await page.screenshot(path=str(OUTPUT_DIR / "04_joining.png"))
-
-        # 6 — wait for call and MTR video tile to render
-        log("Waiting 25s for call to connect and MTR video to appear...")
+        # 6 — wait for video to render
+        log("Waiting 25s for MTR video...", run_dir)
         await page.wait_for_timeout(25000)
-        shot = OUTPUT_DIR / "05_in_call.png"
+        shot = run_dir / "03_in_call.png"
         await page.screenshot(path=str(shot))
-        log(f"In-call screenshot saved: {shot}")
+        log(f"In-call screenshot: {shot}", run_dir)
 
         # 7 — analyse
         live, reason = analyse_feed(shot)
-        log(f"\n{'='*50}")
-        log(f"RESULT: {'CAMERA LIVE ✓' if live else 'NO CAMERA FEED ✗'}")
-        log(f"DETAIL: {reason}")
-        log(f"SCREENSHOTS: {OUTPUT_DIR}")
-        log(f"{'='*50}\n")
+        result_label = "CAMERA LIVE ✓" if live else "NO CAMERA FEED ✗"
+        log("=" * 50, run_dir)
+        log(f"RESULT: {result_label}", run_dir)
+        log(f"DETAIL: {reason}", run_dir)
+        log("=" * 50, run_dir)
 
         # 8 — leave
         for sel in [
@@ -198,7 +203,7 @@ async def main():
             btn = page.locator(sel).first
             try:
                 if await btn.is_visible(timeout=3000):
-                    log("Leaving call")
+                    log("Leaving call", run_dir)
                     await btn.click()
                     await page.wait_for_timeout(2000)
                     break
