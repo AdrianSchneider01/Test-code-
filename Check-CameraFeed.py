@@ -26,13 +26,30 @@ OUTPUT_DIR   = Path(__file__).parent / "CameraCheckOutput"
 def log(msg): print(f"[cam-check] {msg}", flush=True)
 
 def analyse_feed(image_path: Path) -> tuple[bool, str]:
-    img  = Image.open(image_path).convert("RGB")
-    stat = ImageStat.Stat(img)
-    avg_stddev = statistics.mean(stat.stddev)
-    log(f"Pixel stddev R={stat.stddev[0]:.1f} G={stat.stddev[1]:.1f} B={stat.stddev[2]:.1f} avg={avg_stddev:.1f}")
-    if avg_stddev < 8:
-        return False, f"Feed appears BLACK / no signal (stddev={avg_stddev:.1f})"
-    return True, f"Feed appears LIVE (stddev={avg_stddev:.1f})"
+    """
+    Check if any participant has a live camera feed.
+    The observer joins with camera OFF (avatar), so any live video must be from the MTR.
+    Detects colourful / high-variance pixels — avatar tiles are near-white/grey.
+    """
+    img   = Image.open(image_path).convert("RGB")
+    pixels = list(img.getdata())
+    total  = len(pixels)
+
+    # Count pixels that are "interesting": not near-grey (R≈G≈B) and not near-white
+    def is_interesting(r, g, b):
+        brightness = (r + g + b) / 3
+        if brightness > 230:          # near-white background
+            return False
+        diff = max(abs(r-g), abs(g-b), abs(r-b))
+        return diff > 30              # colourful enough to be real video
+
+    interesting = sum(1 for r, g, b in pixels if is_interesting(r, g, b))
+    pct = 100 * interesting / total
+    log(f"Interesting pixels: {interesting}/{total} ({pct:.1f}%)")
+
+    if pct < 3:
+        return False, f"No live camera feed detected ({pct:.1f}% interesting pixels)"
+    return True, f"Live camera feed detected ({pct:.1f}% interesting pixels)"
 
 async def main():
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -43,7 +60,6 @@ async def main():
             args=[
                 "--no-sandbox",
                 "--use-fake-ui-for-media-stream",
-                "--use-fake-device-for-media-stream",
             ],
         )
         ctx = await browser.new_context(
