@@ -28,7 +28,7 @@ try {
 }
 
 # ── 2. Deploy latest scripts to MTR ──────────────────────────────────────────
-Write-Log "Deploying scripts to $MtrHost:$MtrScriptDir..."
+Write-Log "Deploying scripts to ${MtrHost}:${MtrScriptDir}..."
 Invoke-Command -Session $s -ScriptBlock { param($d) New-Item -ItemType Directory -Path $d -Force | Out-Null } -ArgumentList $MtrScriptDir
 
 foreach ($file in @("Diag9.ps1", "MTR-InjectUIAutomation.ps1", "MTR-TestCallHelper.ps1")) {
