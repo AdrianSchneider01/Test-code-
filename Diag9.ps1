@@ -122,7 +122,7 @@ function Try-RestStatus {
             $resp = Invoke-RestMethod -Uri $ep -Method Get -TimeoutSec 5 -ErrorAction Stop
             Write-Log "REST status $ep -> $($resp | ConvertTo-Json -Depth 3 -Compress)"
             return $true
-        } catch { Write-Log "REST status $ep: $($_.Exception.Message)" "WARN" }
+        } catch { Write-Log "REST status ${ep}: $($_.Exception.Message)" "WARN" }
     }
     return $false
 }
