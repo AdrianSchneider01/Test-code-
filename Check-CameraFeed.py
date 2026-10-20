@@ -223,28 +223,38 @@ async def main():
             "button[aria-label*='camera' i]",
             "[role='switch'][aria-label*='camera' i]",
         ]
-        # Check "Your camera is turned off" text — most reliable state indicator in Teams v2.
-        # Teams doesn't expose the toggle state via standard ARIA attributes.
+        # Determine camera state — check UI text indicators first
         try:
             cam_off_text = await page.locator("text=Your camera is turned off").is_visible(timeout=2000)
         except Exception:
             cam_off_text = False
 
-        if cam_off_text:
-            log("Camera already off (confirmed by UI text)", run_dir)
+        # Also check the toggle aria-label for "not available" (permission denied)
+        cam_unavailable = False
+        for sel in cam_selectors:
+            btn = page.locator(sel).first
+            try:
+                if await btn.is_visible(timeout=1000):
+                    aria = (await btn.get_attribute("aria-label") or "").lower()
+                    if "not available" in aria or "unavailable" in aria:
+                        cam_unavailable = True
+                    log(f"Camera control found ({sel}) aria='{aria}'", run_dir)
+                    break
+            except Exception:
+                pass
+
+        if cam_off_text or cam_unavailable:
+            log(f"Camera off/unavailable — not clicking toggle", run_dir)
         else:
-            # Camera appears to be on — find and click the toggle
+            # Camera appears to be on — click the toggle to turn it off
             for sel in cam_selectors:
                 btn = page.locator(sel).first
                 try:
                     if await btn.is_visible(timeout=1500):
                         aria = (await btn.get_attribute("aria-label") or "").lower()
-                        log(f"Camera control found ({sel}) aria='{aria}' — clicking to turn off", run_dir)
+                        log(f"Camera ON ({sel}) aria='{aria}' — clicking to turn off", run_dir)
                         await btn.click()
                         await page.wait_for_timeout(800)
-                        # Verify it turned off
-                        turned_off = await page.locator("text=Your camera is turned off").is_visible(timeout=2000)
-                        log(f"Camera off confirmed: {turned_off}", run_dir)
                         break
                 except Exception:
                     pass
