@@ -32,7 +32,7 @@ def analyse_feed(image_path: Path) -> tuple[bool, str]:
     Detects colourful / high-variance pixels — avatar tiles are near-white/grey.
     """
     img   = Image.open(image_path).convert("RGB")
-    pixels = list(img.getdata())
+    pixels = list(img.get_flattened_data())
     total  = len(pixels)
 
     # Count pixels that are "interesting": not near-grey (R≈G≈B) and not near-white
