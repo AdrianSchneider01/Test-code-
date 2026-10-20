@@ -22,7 +22,10 @@ from pathlib import Path
 from urllib.parse import urlparse, parse_qs, unquote
 from playwright.async_api import async_playwright
 
-MEETING_URL = "https://teams.microsoft.com/meet/497737059187682?p=NnqALr74DBIi2oFvDT"
+# Navigate directly to the Teams web client URL, bypassing the launcher.html
+# page that triggers the "Open Microsoft Teams?" protocol handler dialog.
+# The /_#/meet/ path goes straight to the web join flow.
+MEETING_URL = "https://teams.microsoft.com/_#/meet/497737059187682?p=NnqALr74DBIi2oFvDT&anon=true"
 GUEST_NAME  = "MTR-Observer"
 OUTPUT_ROOT = Path(__file__).parent / "CameraCheckOutput"
 LOG_FILE    = OUTPUT_ROOT / "camera_log.txt"
@@ -134,11 +137,17 @@ async def main():
         # page.keyboard.press only reaches the page context, not Chrome's
         # browser UI, so we use the Windows keybd_event API to send an
         # OS-level Escape that dismisses the dialog.
+        # Chrome's "Open Microsoft Teams?" dialog shows with Cancel focused (blue).
+        # Escape alone highlights Cancel but doesn't click it — Enter activates it.
         await page.wait_for_timeout(3500)
-        ctypes.windll.user32.keybd_event(0x1B, 0, 0, 0)       # VK_ESCAPE down
+        ctypes.windll.user32.keybd_event(0x1B, 0, 0, 0)        # VK_ESCAPE down
         time.sleep(0.05)
         ctypes.windll.user32.keybd_event(0x1B, 0, 0x0002, 0)   # VK_ESCAPE up
-        log("Sent OS-level Escape to dismiss protocol dialog", run_dir)
+        time.sleep(0.15)
+        ctypes.windll.user32.keybd_event(0x0D, 0, 0, 0)        # VK_RETURN down (clicks Cancel)
+        time.sleep(0.05)
+        ctypes.windll.user32.keybd_event(0x0D, 0, 0x0002, 0)   # VK_RETURN up
+        log("Sent Escape+Enter to dismiss protocol dialog", run_dir)
         await page.wait_for_timeout(1000)
         await page.screenshot(path=str(run_dir / "01_landing.png"))
 
@@ -163,9 +172,9 @@ async def main():
         for ready_sel in [
             "input[placeholder*='name' i]",
             "[data-tid='prejoin-display-name-input']",
+            "[data-tid='prejoin-join-button']",
             "button:has-text('Join now')",
             "button:has-text('Ask to join')",
-            "button:has-text('Join')",
         ]:
             try:
                 await page.wait_for_selector(ready_sel, timeout=15000)
@@ -247,7 +256,6 @@ async def main():
             "[data-tid='prejoin-join-button']",
             "button:has-text('Join now')",
             "button:has-text('Ask to join')",
-            "button:has-text('Join')",
         ]:
             btn = page.locator(sel).first
             try:
