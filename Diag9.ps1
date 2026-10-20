@@ -129,8 +129,8 @@ if (-not $joined) {
 }
 
 $joinTime = Get-Date
-Write-Log "Waiting 25s for call to connect..."
-Start-Sleep -Seconds 25
+Write-Log "Waiting 60s for call to connect and camera check to complete..."
+Start-Sleep -Seconds 60
 
 Dump-Buttons "in-call"
 
