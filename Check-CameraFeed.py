@@ -227,13 +227,13 @@ async def main():
             btn = page.locator(sel).first
             try:
                 if await btn.is_visible(timeout=1500):
-                    aria    = (await btn.get_attribute("aria-label") or "").lower()
-                    pressed = (await btn.get_attribute("aria-pressed") or "").lower()
-                    checked = (await btn.get_attribute("aria-checked") or "").lower()
-                    log(f"Camera control found ({sel}) aria='{aria}' pressed='{pressed}' checked='{checked}'", run_dir)
-                    # Camera is ON when the control is "pressed"/"checked" true,
-                    # or when the label says "turn … off"
-                    cam_is_on = (pressed == "true" or checked == "true" or
+                    aria       = (await btn.get_attribute("aria-label") or "").lower()
+                    pressed    = (await btn.get_attribute("aria-pressed") or "").lower()
+                    aria_chk   = (await btn.get_attribute("aria-checked") or "").lower()
+                    # INPUT[role=switch] uses JS .checked property, not aria-checked attribute
+                    js_checked = await btn.evaluate("el => el.checked === true || el.getAttribute('aria-checked') === 'true'")
+                    log(f"Camera control found ({sel}) aria='{aria}' pressed='{pressed}' aria-checked='{aria_chk}' js-checked={js_checked}", run_dir)
+                    cam_is_on = (pressed == "true" or aria_chk == "true" or js_checked or
                                  any(p in aria for p in [
                                      "turn camera off", "turn off camera",
                                      "turn your camera off", "disable camera",
