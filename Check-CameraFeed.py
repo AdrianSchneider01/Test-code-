@@ -217,12 +217,11 @@ async def main():
         log(f"Pre-join buttons: {all_labels}", run_dir)
 
         cam_selectors = [
+            "[data-tid='toggle-video']",                        # Teams v2 pre-join camera switch (INPUT role=switch)
             "[data-tid='calling-prejoin-local-video-toggle']",
             "[data-tid='toggle-av']",
             "button[aria-label*='camera' i]",
-            "button[aria-label*='video' i]",
             "[role='switch'][aria-label*='camera' i]",
-            "[role='switch'][aria-label*='video' i]",
         ]
         for sel in cam_selectors:
             btn = page.locator(sel).first
