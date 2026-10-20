@@ -89,7 +89,10 @@ async def main():
         # 1 — navigate
         log("Navigating to meeting...", run_dir)
         await page.goto(MEETING_URL, wait_until="domcontentloaded", timeout=30000)
-        await page.wait_for_timeout(4000)
+        await page.wait_for_timeout(1500)
+        # Dismiss Chrome's native "Open Microsoft Teams?" dialog if it appears
+        await page.keyboard.press("Escape")
+        await page.wait_for_timeout(2500)
         await page.screenshot(path=str(run_dir / "01_landing.png"))
 
         # 2 — choose browser join
