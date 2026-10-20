@@ -143,9 +143,12 @@ if ($issues.Count -gt 0) {
     Write-Log "No in-call issues detected."
 }
 
-# Step 2: leave via UIA 'Leave' button; fall back to mouse click
+# Step 2: leave via UIA; Teams may call the button "Leave", "Leave call", or "Hang up"
 Write-Log "=== Attempting to leave ==="
-$leftViaUIA = Invoke-Button "Leave"
+$leftViaUIA = $false
+foreach ($leaveLabel in @("Leave", "Leave call", "Hang up", "End call")) {
+    if (Invoke-Button $leaveLabel) { $leftViaUIA = $true; break }
+}
 
 if (-not $leftViaUIA) {
     Write-Log "UIA Leave not found - trying mouse click fallback..."

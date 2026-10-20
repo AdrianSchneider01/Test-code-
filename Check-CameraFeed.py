@@ -16,6 +16,7 @@ import asyncio
 import sys
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import urlparse, parse_qs, unquote
 from playwright.async_api import async_playwright
 from PIL import Image
 
@@ -73,6 +74,7 @@ async def main():
             args=[
                 "--no-sandbox",
                 "--use-fake-ui-for-media-stream",
+                "--disable-features=ExternalProtocolDialog",
             ],
         )
         ctx = await browser.new_context(
@@ -86,26 +88,43 @@ async def main():
         )
         page = await ctx.new_page()
 
+        # Intercept Teams launcher.html so we never see the native
+        # "Open Microsoft Teams?" OS dialog or "Continue on this browser" page.
+        # Teams redirects the meeting URL through launcher.html?url=<target>;
+        # we extract that target and redirect straight to it.
+        async def bypass_launcher(route):
+            req_url = route.request.url
+            parsed  = urlparse(req_url)
+            params  = parse_qs(parsed.query)
+            target  = unquote(params.get("url", [""])[0])
+            if target:
+                if not target.startswith("http"):
+                    target = f"https://teams.microsoft.com{target}"
+                log("Launcher intercepted — going straight to web client", run_dir)
+                await route.fulfill(status=302, headers={"Location": target})
+            else:
+                await route.continue_()
+
+        await page.route("**/dl/launcher/**", bypass_launcher)
+
         # 1 — navigate
         log("Navigating to meeting...", run_dir)
         await page.goto(MEETING_URL, wait_until="domcontentloaded", timeout=30000)
-        await page.wait_for_timeout(1500)
-        # Dismiss Chrome's native "Open Microsoft Teams?" dialog if it appears
-        await page.keyboard.press("Escape")
-        await page.wait_for_timeout(2500)
+        await page.wait_for_timeout(3000)
         await page.screenshot(path=str(run_dir / "01_landing.png"))
 
-        # 2 — choose browser join
+        # 2 — "Continue on this browser" safety fallback
+        #     (bypass_launcher usually skips this page entirely)
         for sel, label in [
             ("text=Continue on this browser", "Continue on this browser"),
             ("text=Join on the web instead",  "Join on the web instead"),
-            ("a:has-text('Join')",             "Join link"),
         ]:
             btn = page.locator(sel).first
             try:
-                if await btn.is_visible(timeout=4000):
-                    log(f"Clicking: {label}", run_dir)
+                if await btn.is_visible(timeout=3000):
+                    log(f"Fallback click: {label}", run_dir)
                     await btn.click()
+                    await page.wait_for_timeout(2000)
                     break
             except Exception:
                 pass
@@ -144,16 +163,20 @@ async def main():
             except Exception:
                 pass
 
-        # 4 — turn camera off
+        # 4 — turn camera off before joining
+        # When camera is ON the button says "Turn camera off" → click it.
+        # When camera is OFF the button says "Turn camera on"  → leave it.
         for sel in ["button[aria-label*='camera' i]", "[data-tid='toggle-av']"]:
             btn = page.locator(sel).first
             try:
                 if await btn.is_visible(timeout=2000):
                     aria = await btn.get_attribute("aria-label") or ""
-                    if "off" not in aria.lower():
-                        log(f"Camera off: {sel}", run_dir)
+                    if "turn camera off" in aria.lower():
+                        log(f"Camera is on — turning it off ({sel})", run_dir)
                         await btn.click()
                         await page.wait_for_timeout(500)
+                    else:
+                        log(f"Camera already off ({aria!r})", run_dir)
                     break
             except Exception:
                 pass
