@@ -18,7 +18,8 @@ function Write-Log { param([string]$m) Write-Host "[$(Get-Date -f 'HH:mm:ss')] $
 
 # ── 1. Connect ────────────────────────────────────────────────────────────────
 Write-Log "Connecting to $MtrHost..."
-$cred = Get-Credential $MtrUser
+$pw   = ConvertTo-SecureString "sfb" -AsPlainText -Force
+$cred = New-Object PSCredential($MtrUser, $pw)
 try {
     $s = New-PSSession -ComputerName $MtrHost -Credential $cred -ErrorAction Stop
     Write-Log "Connected."
