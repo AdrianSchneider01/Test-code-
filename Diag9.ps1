@@ -66,6 +66,38 @@ function Dump-Buttons {
     }
 }
 
+function Check-InCallIssues {
+    $issues = [System.Collections.Generic.List[hashtable]]::new()
+    $allBtns = $AE::RootElement.FindAll($TF::Descendants, $allCond) | Where-Object {
+        try { $_.Current.ControlType -eq [System.Windows.Automation.ControlType]::Button } catch { $false }
+    }
+    foreach ($b in $allBtns) {
+        try {
+            $name    = $b.Current.Name
+            $enabled = $b.Current.IsEnabled
+            # Notification banners (dismissable "Close" buttons whose name contains the full banner text)
+            if ($name -match "monitors?\s+(is|are)\s+disconnected") {
+                $issues.Add(@{ Severity="WARN"; Component="Display";     Message="Monitor disconnected" }) }
+            if ($name -match "^No Microphone") {
+                $issues.Add(@{ Severity="FAIL"; Component="Microphone";  Message="No microphone detected" }) }
+            if ($name -match "^No Camera|^Camera.*not found") {
+                $issues.Add(@{ Severity="FAIL"; Component="Camera";      Message="No camera detected" }) }
+            # Camera button state
+            if ($name -eq "Turn camera on"  -and -not $enabled) {
+                $issues.Add(@{ Severity="FAIL"; Component="Camera";      Message="Camera unavailable (button disabled)" }) }
+            if ($name -eq "Turn camera on"  -and $enabled) {
+                $issues.Add(@{ Severity="WARN"; Component="Camera";      Message="Camera is off during call" }) }
+            # Mic button state
+            if ($name -eq "Unmute mic"      -and -not $enabled) {
+                $issues.Add(@{ Severity="FAIL"; Component="Microphone";  Message="Microphone unavailable (button disabled)" }) }
+            # Speaker button state
+            if ($name -eq "Speaker is off"  -and -not $enabled) {
+                $issues.Add(@{ Severity="WARN"; Component="Speaker";     Message="Speaker unavailable (button disabled)" }) }
+        } catch {}
+    }
+    return $issues
+}
+
 function Click-HangupButton {
     param([int]$X, [int]$Y)
     Write-Log "Mouse click at ($X, $Y) - hang-up fallback"
@@ -102,6 +134,15 @@ Start-Sleep -Seconds 25
 
 Dump-Buttons "in-call"
 
+# Check hardware / notification issues while in-call
+$issues = Check-InCallIssues
+if ($issues.Count -gt 0) {
+    Write-Log "=== In-call issues detected ==="
+    foreach ($i in $issues) { Write-Log "  [$($i.Severity)] $($i.Component): $($i.Message)" }
+} else {
+    Write-Log "No in-call issues detected."
+}
+
 # Step 2: leave via UIA 'Leave' button; fall back to mouse click
 Write-Log "=== Attempting to leave ==="
 $leftViaUIA = Invoke-Button "Leave"
@@ -123,11 +164,29 @@ $backToHome       = (Has-Button "Meet now") -or (Has-Button "Join with an ID")
 
 Write-Log "LeaveGone=$leaveGone  BackToHome=$backToHome  ConnectedSec=$connectedSeconds"
 
-$status  = if ($joined -and ($leaveGone -or $backToHome)) { "PASS" } else { "FAIL" }
-$message = if ($status -eq "PASS") { "Joined and left successfully." } else { "Join=$joined LeaveGone=$leaveGone BackToHome=$backToHome" }
+$left = $leaveGone -or $backToHome
+if (-not $joined -or -not $left) {
+    $status = "FAIL"
+} elseif ($issues.Count -gt 0 -and ($issues | Where-Object { $_.Severity -eq "FAIL" })) {
+    $status = "FAIL"
+} elseif ($issues.Count -gt 0) {
+    $status = "WARN"
+} else {
+    $status = "PASS"
+}
+
+$issueList = $issues | ForEach-Object { "$($_.Severity) $($_.Component): $($_.Message)" }
+$message   = if ($status -eq "PASS") { "Joined and left successfully. No issues." } `
+             elseif ($status -eq "WARN") { "Joined and left. Warnings: $($issueList -join '; ')" } `
+             else { "FAIL - Join=$joined Left=$left Issues: $($issueList -join '; ')" }
 Write-Log "Result: $status - $message"
 
-@{ Status = $status; Message = $message; ConnectedSeconds = $connectedSeconds; Timestamp = (Get-Date -f "o") } |
-    ConvertTo-Json | Set-Content $ResultFile -Encoding UTF8
+@{
+    Status           = $status
+    Message          = $message
+    ConnectedSeconds = $connectedSeconds
+    Timestamp        = (Get-Date -f "o")
+    Issues           = @($issues | ForEach-Object { [PSCustomObject]$_ })
+} | ConvertTo-Json -Depth 3 | Set-Content $ResultFile -Encoding UTF8
 Write-Log "Written to $ResultFile"
 Write-Log "Diag9 done."
