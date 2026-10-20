@@ -13,8 +13,10 @@ Usage:
 """
 
 import asyncio
+import ctypes
 import subprocess
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs, unquote
@@ -119,10 +121,15 @@ async def main():
         # 1 — navigate
         log("Navigating to meeting...", run_dir)
         await page.goto(MEETING_URL, wait_until="domcontentloaded", timeout=30000)
-        # Wait for Teams JS to run, then press Escape to dismiss the
-        # "Open Microsoft Teams?" OS dialog if it appeared.
-        await page.wait_for_timeout(4000)
-        await page.keyboard.press("Escape")
+        # Chrome may show a native "Open Microsoft Teams?" dialog.
+        # page.keyboard.press only reaches the page context, not Chrome's
+        # browser UI, so we use the Windows keybd_event API to send an
+        # OS-level Escape that dismisses the dialog.
+        await page.wait_for_timeout(3500)
+        ctypes.windll.user32.keybd_event(0x1B, 0, 0, 0)       # VK_ESCAPE down
+        time.sleep(0.05)
+        ctypes.windll.user32.keybd_event(0x1B, 0, 0x0002, 0)   # VK_ESCAPE up
+        log("Sent OS-level Escape to dismiss protocol dialog", run_dir)
         await page.wait_for_timeout(1000)
         await page.screenshot(path=str(run_dir / "01_landing.png"))
 
@@ -159,6 +166,7 @@ async def main():
                 pass
         await page.wait_for_timeout(1000)
         await page.screenshot(path=str(run_dir / "02_prejoin.png"))
+        log("Pre-join screenshot saved", run_dir)
 
         # 3 — enter guest name
         for sel in [
