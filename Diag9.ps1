@@ -2,6 +2,7 @@
 # Screen resolution: 1024x768. Hang-up button approx (975, 712).
 
 param(
+    [string]$JoinUrl    = "",          # passed by MTR-InjectUIAutomation.ps1, not used (we join via UIA)
     [string]$ResultFile = "C:\MTR\TestCallResult.json",
     [int]$HangupX       = 975,
     [int]$HangupY       = 712
