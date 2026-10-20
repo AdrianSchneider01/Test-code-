@@ -21,7 +21,6 @@ from datetime import datetime
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs, unquote
 from playwright.async_api import async_playwright
-from PIL import Image
 
 MEETING_URL = "https://teams.microsoft.com/meet/497737059187682?p=NnqALr74DBIi2oFvDT"
 GUEST_NAME  = "MTR-Observer"
@@ -41,27 +40,37 @@ def log(msg, run_dir=None):
         with open(run_dir / "run_log.txt", "a", encoding="utf-8") as f:
             f.write(line + "\n")
 
-def analyse_feed(image_path: Path) -> tuple[bool, str]:
+async def check_live_video(page) -> tuple[bool, str]:
     """
-    Check if any participant has a live camera feed.
-    The observer joins with camera OFF (avatar), so any live video must be from the MTR.
-    Detects colourful / high-variance pixels — avatar tiles are near-white/grey.
+    Inspect the DOM for active <video> elements with real dimensions.
+    A playing remote camera stream has videoWidth > 0 and readyState >= 2.
+    Pixel analysis was unreliable — Teams UI elements caused false positives.
     """
-    img    = Image.open(image_path).convert("RGB")
-    pixels = list(img.getdata())
-    total  = len(pixels)
-
-    def is_interesting(r, g, b):
-        brightness = (r + g + b) / 3
-        if brightness > 230:
-            return False
-        return max(abs(r-g), abs(g-b), abs(r-b)) > 30
-
-    interesting = sum(1 for r, g, b in pixels if is_interesting(r, g, b))
-    pct = 100 * interesting / total
-    if pct < 3:
-        return False, f"No live camera feed detected ({pct:.1f}% interesting pixels)"
-    return True, f"Live camera feed detected ({pct:.1f}% interesting pixels)"
+    try:
+        result = await page.evaluate("""
+            () => {
+                const all = Array.from(document.querySelectorAll('video'));
+                const active = all.filter(v =>
+                    !v.paused &&
+                    v.readyState >= 2 &&
+                    v.videoWidth > 50 &&
+                    v.videoHeight > 50
+                );
+                return {
+                    total: all.length,
+                    active: active.length,
+                    widths: active.map(v => v.videoWidth + 'x' + v.videoHeight)
+                };
+            }
+        """)
+        total  = result.get('total', 0)
+        active = result.get('active', 0)
+        widths = result.get('widths', [])
+        if active > 0:
+            return True, f"Live video stream detected ({active} active stream(s): {widths})"
+        return False, f"No live video stream (found {total} video elements, none playing with dimensions)"
+    except Exception as e:
+        return False, f"Video DOM check error: {e}"
 
 async def main():
     # timestamped folder for this run
@@ -184,24 +193,48 @@ async def main():
             except Exception:
                 pass
 
-        # 4 — turn camera off before joining
-        # Log the actual aria-label so we can tune the match if needed.
-        for sel in ["button[aria-label*='camera' i]", "[data-tid='toggle-av']"]:
+        # 4 — turn camera off before joining.
+        # Dump all button aria-labels so we can see exactly what Teams renders.
+        all_labels = await page.evaluate("""
+            () => Array.from(document.querySelectorAll('button, [role="button"], [role="switch"]'))
+                .map(el => ({
+                    tag: el.tagName,
+                    aria: el.getAttribute('aria-label') || '',
+                    tid:  el.getAttribute('data-tid') || '',
+                    role: el.getAttribute('role') || ''
+                }))
+                .filter(el => el.aria || el.tid)
+        """)
+        log(f"Pre-join buttons: {all_labels}", run_dir)
+
+        cam_selectors = [
+            "[data-tid='calling-prejoin-local-video-toggle']",
+            "[data-tid='toggle-av']",
+            "button[aria-label*='camera' i]",
+            "button[aria-label*='video' i]",
+            "[role='switch'][aria-label*='camera' i]",
+            "[role='switch'][aria-label*='video' i]",
+        ]
+        for sel in cam_selectors:
             btn = page.locator(sel).first
             try:
-                if await btn.is_visible(timeout=2000):
-                    aria = (await btn.get_attribute("aria-label") or "").lower()
-                    log(f"Camera button aria-label: '{aria}'", run_dir)
-                    # Click if camera is currently ON (any phrasing Teams may use)
-                    camera_on_phrases = [
-                        "turn camera off", "turn off camera",
-                        "disable camera", "stop camera",
-                        "camera on", "video on",
-                    ]
-                    if any(p in aria for p in camera_on_phrases):
-                        log("Camera ON → clicking to turn off", run_dir)
+                if await btn.is_visible(timeout=1500):
+                    aria    = (await btn.get_attribute("aria-label") or "").lower()
+                    pressed = (await btn.get_attribute("aria-pressed") or "").lower()
+                    checked = (await btn.get_attribute("aria-checked") or "").lower()
+                    log(f"Camera control found ({sel}) aria='{aria}' pressed='{pressed}' checked='{checked}'", run_dir)
+                    # Camera is ON when the control is "pressed"/"checked" true,
+                    # or when the label says "turn … off"
+                    cam_is_on = (pressed == "true" or checked == "true" or
+                                 any(p in aria for p in [
+                                     "turn camera off", "turn off camera",
+                                     "turn your camera off", "disable camera",
+                                     "stop camera", "camera on", "video on",
+                                 ]))
+                    if cam_is_on:
+                        log("Camera ON → turning off", run_dir)
                         await btn.click()
-                        await page.wait_for_timeout(500)
+                        await page.wait_for_timeout(600)
                     else:
                         log("Camera already off", run_dir)
                     break
@@ -239,8 +272,8 @@ async def main():
         await page.screenshot(path=str(shot))
         log(f"In-call screenshot: {shot}", run_dir)
 
-        # 7 — analyse
-        live, reason = analyse_feed(shot)
+        # 7 — analyse via DOM video element check (more reliable than pixel analysis)
+        live, reason = await check_live_video(page)
         result_label = "CAMERA LIVE ✓" if live else "NO CAMERA FEED ✗"
         log("=" * 50, run_dir)
         log(f"RESULT: {result_label}", run_dir)
