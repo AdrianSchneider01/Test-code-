@@ -129,8 +129,26 @@ if (-not $joined) {
 }
 
 $joinTime = Get-Date
-Write-Log "Waiting 60s for call to connect and camera check to complete..."
-Start-Sleep -Seconds 60
+Write-Log "Polling for lobby admit buttons for up to 90s while call settles..."
+
+# Poll every 5s: admit any observer waiting in lobby, then wait for camera check
+$pollDeadline = (Get-Date).AddSeconds(90)
+while ((Get-Date) -lt $pollDeadline) {
+    $allBtns = $AE::RootElement.FindAll($TF::Descendants, $allCond) | Where-Object {
+        try { $_.Current.ControlType -eq [System.Windows.Automation.ControlType]::Button } catch { $false }
+    }
+    foreach ($b in $allBtns) {
+        try {
+            $name = $b.Current.Name
+            if ($name -match '(?i)\badmit\b') {
+                Write-Log "Lobby: found admit button '$name' — clicking"
+                try { $b.GetCurrentPattern($IPP).Invoke(); Write-Log "Admitted." }
+                catch { Write-Log "Admit invoke failed: $_" "WARN" }
+            }
+        } catch {}
+    }
+    Start-Sleep -Seconds 5
+}
 
 Dump-Buttons "in-call"
 

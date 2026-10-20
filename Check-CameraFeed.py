@@ -282,6 +282,41 @@ async def main():
             await browser.close()
             return False
 
+        # 5b — wait if held in lobby
+        in_lobby = False
+        for lobby_sel in [
+            "text=You're in the lobby",
+            "text=Waiting for someone to let you in",
+            "text=Someone will let you in soon",
+            "[data-tid='prejoin-waiting-for-host']",
+        ]:
+            try:
+                if await page.locator(lobby_sel).is_visible(timeout=6000):
+                    in_lobby = True
+                    log(f"In lobby ({lobby_sel}) — waiting for MTR to admit...", run_dir)
+                    break
+            except Exception:
+                pass
+
+        if in_lobby:
+            await page.screenshot(path=str(run_dir / "03_lobby.png"))
+            admitted = False
+            for i in range(24):  # poll every 5s, up to 2 min
+                await page.wait_for_timeout(5000)
+                try:
+                    if await page.locator("[data-tid='hangup-button']").is_visible(timeout=1000):
+                        admitted = True
+                        log(f"Admitted from lobby after {(i+1)*5}s", run_dir)
+                        break
+                except Exception:
+                    pass
+                log(f"Still in lobby ({(i+1)*5}s)...", run_dir)
+            if not admitted:
+                log("ERROR: timed out waiting for lobby admission", run_dir)
+                await page.screenshot(path=str(run_dir / "03_lobby_timeout.png"))
+                await browser.close()
+                return False
+
         # 6 — wait for video to render
         log("Waiting 25s for MTR video...", run_dir)
         await page.wait_for_timeout(25000)

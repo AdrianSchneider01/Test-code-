@@ -9,7 +9,7 @@ param(
     [string]$TaskName     = "MTRTestCallTemp",
     [string]$LocalPython  = "C:\Users\adria\AppData\Local\Python\pythoncore-3.14-64\python.exe",
     [string]$LocalScript  = "$PSScriptRoot\Check-CameraFeed.py",
-    [int]   $JoinWaitSec  = 15    # seconds to wait for MTR to join before browser check
+    [int]   $JoinWaitSec  = 25    # seconds to wait for MTR to join before browser check
 )
 
 $ScriptDir = $PSScriptRoot
