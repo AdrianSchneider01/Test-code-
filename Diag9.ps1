@@ -173,17 +173,19 @@ if (-not $joined) {
     exit 1
 }
 
+$joinTime = Get-Date
 Write-Log "Join invoked. Waiting 25s for call to connect..."
 Start-Sleep -Seconds 25
 
 Dump-Buttons "in-call"
 
-# Step 3: leave - try REST API first, then mouse click
+# Step 3: leave - UIA Leave button first (companion app exposes it in-call),
+#                 then mouse click fallback
 Write-Log "=== Attempting to leave call ==="
-$leftViaApi = Try-RestLeave
+$leftViaUIA = Invoke-Button "Leave"
 
-if (-not $leftViaApi) {
-    Write-Log "REST leave failed. Trying mouse click on hang-up button..."
+if (-not $leftViaUIA) {
+    Write-Log "UIA Leave not found. Trying mouse click on hang-up button..."
     Click-HangupButton $HangupX $HangupY
 }
 
@@ -193,23 +195,23 @@ Start-Sleep -Seconds 10
 Dump-Buttons "after-leave"
 
 # Step 4: determine result
-$joinButtonBack = Has-Button "Join"
-$meetNow        = Has-Button "Meet now"  # should always be present on home screen
+# After leaving, companion app returns to home screen (shows "Meet now" / "Join with an ID").
+# If "Leave" button is gone and home screen buttons are back = left successfully.
+$leaveGone   = -not (Has-Button "Leave")
+$backToHome  = (Has-Button "Meet now") -or (Has-Button "Join with an ID")
+$connectedSeconds = [int]((Get-Date) - $joinTime).TotalSeconds
 
-Write-Log "Post-leave state: JoinVisible=$joinButtonBack  MeetNow=$meetNow"
+Write-Log "Post-leave: LeaveGone=$leaveGone  BackToHome=$backToHome  ConnectedSec=$connectedSeconds"
 
-# For calendar meeting flow: after leaving, Teams Rooms goes back to home screen.
-# The companion app should still show "Join" for the same meeting card (can rejoin).
-# If MeetNow=True and we had a successful call, consider it passed.
-$result = if ($joined) { "PASS" } else { "FAIL" }
-Write-Log "Result: $result"
+$status  = if ($joined -and ($leaveGone -or $backToHome)) { "PASS" } else { "FAIL" }
+$message = if ($status -eq "PASS") { "Joined and left successfully." } else { "Join=$joined LeaveGone=$leaveGone BackToHome=$backToHome" }
+Write-Log "Result: $status - $message"
 
 $json = @{
-    timestamp = (Get-Date -f "o")
-    result    = $result
-    joined    = $joined
-    leftViaApi = $leftViaApi
-    joinButtonBack = $joinButtonBack
+    Status           = $status
+    Message          = $message
+    ConnectedSeconds = $connectedSeconds
+    Timestamp        = (Get-Date -f "o")
 } | ConvertTo-Json
 $json | Set-Content $ResultFile -Encoding UTF8
 Write-Log "Result written to $ResultFile"
