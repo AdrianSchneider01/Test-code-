@@ -74,10 +74,26 @@ async def main():
                 if await btn.is_visible(timeout=4000):
                     log(f"Clicking: {label}")
                     await btn.click()
-                    await page.wait_for_timeout(3000)
                     break
             except Exception:
                 pass
+
+        # Wait for the pre-join page to fully render
+        log("Waiting for pre-join screen to load...")
+        for ready_sel in [
+            "input[placeholder*='name' i]",
+            "[data-tid='prejoin-display-name-input']",
+            "button:has-text('Join now')",
+            "button:has-text('Ask to join')",
+            "button:has-text('Join')",
+        ]:
+            try:
+                await page.wait_for_selector(ready_sel, timeout=15000)
+                log(f"Pre-join ready (found: {ready_sel})")
+                break
+            except Exception:
+                pass
+        await page.wait_for_timeout(1000)
         await page.screenshot(path=str(OUTPUT_DIR / "02_after_browser_choice.png"))
 
         # 3 — enter guest name
