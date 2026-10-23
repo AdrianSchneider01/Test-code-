@@ -5,15 +5,21 @@
 # ASCII only (PS 5.1).
 #
 # Example:
-#   .\Install-MTRDailyTest.ps1 -Url https://mtr-results.adrian-ddf.workers.dev `
-#       -ReportToken <token> -Room "Boardroom Test Account" -At 07:00
+#   powershell -ExecutionPolicy Bypass -File .\Install-MTRDailyTest.ps1 `
+#       -Url https://mtr-results.adrian-ddf.workers.dev -ReportToken <token> `
+#       -Room "Boardroom Test Account" -JoinMode Calendar -MeetingId "123 456 789" -At 07:00
 #
-# Diag9 options (meeting ID, passcode, join mode) can be passed via -Diag9Args.
+# Calendar: the room joins the test meeting from its own calendar; -MeetingId is
+#           the expected ID (checked on screen). Id: the room types -MeetingId and
+#           -Passcode into "Join with an ID".
 
 param(
     [Parameter(Mandatory)] [string]$Url,
     [Parameter(Mandatory)] [string]$ReportToken,
     [Parameter(Mandatory)] [string]$Room,          # must match the room's Teams display name
+    [ValidateSet("Calendar", "Id")] [string]$JoinMode = "Calendar",
+    [Parameter(Mandatory)] [string]$MeetingId,
+    [string]$Passcode   = "",                      # needed for -JoinMode Id
     [string]$At         = "07:00",
     [string]$Diag9Args  = "",
     [string]$SourceDir  = $PSScriptRoot,
@@ -29,7 +35,9 @@ Write-Host "Copied Diag9.ps1 to $InstallDir"
 
 # Endpoint config: readable by the Skype user (the task runs as Skype), writable by admins only
 $cfgPath = Join-Path $InstallDir "mtr-config.json"
-@{ url = $Url.TrimEnd('/'); reportToken = $ReportToken; room = $Room } | ConvertTo-Json | Set-Content $cfgPath -Encoding ASCII
+@{ url = $Url.TrimEnd('/'); reportToken = $ReportToken; room = $Room
+   joinMode = $JoinMode; meetingId = ($MeetingId -replace '\D', ''); passcode = $Passcode } |
+    ConvertTo-Json | Set-Content $cfgPath -Encoding ASCII
 $acl = New-Object Security.AccessControl.FileSecurity
 $acl.SetAccessRuleProtection($true, $false)
 foreach ($rule in @(
@@ -39,7 +47,7 @@ foreach ($rule in @(
     $acl.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule($rule[0], $rule[1], "Allow")))
 }
 Set-Acl $cfgPath $acl
-Write-Host "Wrote $cfgPath (room '$Room')"
+Write-Host "Wrote $cfgPath (room '$Room', $JoinMode mode, meeting $MeetingId)"
 
 # Daily task in the Skype interactive session (LogonType Interactive = session 1)
 $script = Join-Path $InstallDir "Diag9.ps1"

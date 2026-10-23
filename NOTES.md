@@ -2,6 +2,14 @@
 
 Dated log of what was tried on the MTR and the result. Newest first.
 
+## 2026-10-23 (14:50-15:20) - automated runs, black-picture check, calendar mode
+- Runs from the scheduled tasks only (one-off triggers added to MTRDailyTest / MTR Observer / MTR Daily Report): 14:50 and 15:00 joined by ID, observer admitted, left, home, email sent. Camera picture was BLACK in both, but the check passed it (stream playing).
+- Black-picture check added to Check-CameraFeed: samples a 64x36 frame of the room's video; brightness < 16 or variation < 6 => status BLACK (camera FAIL in the email). 15:10 run: "black (brightness 0, variation 0)", email "0 PASS, 0 WARN, 1 FAIL".
+- Meeting details removed from the code: room reads joinMode/meetingId/passcode from C:\MTR\mtr-config.json; observer reads room name + join link from %USERPROFILE%\mtr-rooms.json. Neither file is in the repo.
+- Adrian created a daily recurring test meeting (ID 432 868 290 785 433) on the Boardroom calendar; on the room it shows as "Adrian Schneider I Busy Integration AV Test".
+- Calendar mode (default): Diag9 waits up to 180 s for the calendar tile's Join, clicks it, reads "Meeting ID: ..." from the call screen and compares with the expected ID (mismatch = FAIL, unreadable = WARN).
+- 15:16 calendar-mode run: joined from calendar, Meeting ID on screen 432868290785433 = expected, observer joined without lobby (bypass on), "Closed overlay 'Close meeting room info'" (overlay handling confirmed), left, home. Observer BLACK again.
+
 ## 2026-10-23 (14:00-14:30) - test call independent of the laptop + results endpoint
 - Results endpoint deployed: Cloudflare Worker `mtr-results` at https://mtr-results.adrian-ddf.workers.dev with D1 database `mtr-results` (Busy Cloudflare account). POST /results needs the report token, GET /results the read token; tokens in `%USERPROFILE%\mtr-endpoint.json` (not in repo). Smoke test: 401 without token, 401 with the wrong token type, write + read OK.
   - Gotcha: piping a secret into `wrangler secret put` from PowerShell stored a trailing CR; the Worker now trims secrets.

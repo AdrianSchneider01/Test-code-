@@ -1,16 +1,20 @@
 # Diag9: MTR test call via companion app UIA
-# Join: calendar "Join" button first; falls back to "Join with an ID" if no meeting on screen.
+# Join: Calendar mode clicks the room's calendar tile "Join" and then checks the
+#       meeting ID shown in the call; Id mode types the ID via "Join with an ID".
 # Leave: invoke Leave/Hang up; fallback mouse click.
+# Meeting details come from C:\MTR\mtr-config.json (joinMode, meetingId, passcode);
+# parameters override them for manual runs.
 
 param(
     [string]$ResultFile = "C:\MTR\TestCallResult.json",
     [string]$ConfigFile = "C:\MTR\mtr-config.json",
-    [string]$MeetingId  = "497737059187682",
-    [string]$Passcode   = "NnqALr74DBIi2oFvDT",
-    # Id: join $MeetingId via "Join with an ID" (same meeting as the camera observer).
-    # Calendar: click the calendar tile's Join (meeting may differ from $MeetingId).
-    [ValidateSet("Id", "Calendar")]
-    [string]$JoinMode   = "Id",
+    [string]$MeetingId  = "",
+    [string]$Passcode   = "",
+    # Calendar: click the calendar tile's Join; $MeetingId is the EXPECTED meeting.
+    # Id: join $MeetingId via "Join with an ID".
+    [ValidateSet("", "Id", "Calendar")]
+    [string]$JoinMode   = "",
+    [int]$CalendarWaitSec = 180,
     [int]$HangupX       = 975,
     [int]$HangupY       = 712
 )
@@ -97,6 +101,17 @@ function Close-Overlays {
             Start-Sleep -Seconds 1
         } catch {}
     }
+}
+
+# The call screen shows "Meeting ID: 497 737 059 187 682"; returns the digits only
+function Get-MeetingIdOnScreen {
+    $textCond = New-Object $PC($AE::ControlTypeProperty, [System.Windows.Automation.ControlType]::Text)
+    foreach ($t in $AE::RootElement.FindAll($TF::Descendants, $textCond)) {
+        try {
+            if ($t.Current.Name -match 'Meeting ID:\s*([\d ]+)') { return ($Matches[1] -replace '\D', '') }
+        } catch {}
+    }
+    return ""
 }
 
 # Text elements show the meeting title, participant tiles and lobby names
@@ -261,28 +276,52 @@ function Send-Result {
 Write-Log "Diag9 started"
 New-Item -ItemType Directory -Path (Split-Path $ResultFile) -Force | Out-Null
 
+# Meeting details from the room's config unless given as parameters
+if (Test-Path $ConfigFile) {
+    $roomCfg = Get-Content $ConfigFile -Raw | ConvertFrom-Json
+    if (-not $JoinMode  -and $roomCfg.joinMode)  { $JoinMode  = $roomCfg.joinMode }
+    if (-not $MeetingId -and $roomCfg.meetingId) { $MeetingId = $roomCfg.meetingId }
+    if (-not $Passcode  -and $roomCfg.passcode)  { $Passcode  = $roomCfg.passcode }
+}
+if (-not $JoinMode) { $JoinMode = "Calendar" }
+$MeetingId = $MeetingId -replace '\D', ''
+Write-Log "JoinMode=$JoinMode ExpectedMeetingId=$MeetingId"
+if ($JoinMode -eq "Id" -and -not $MeetingId) {
+    Write-Result -Status "FAIL" -Message "JoinMode Id but no meetingId in $ConfigFile" -Extra @{ Joined = $false; Left = $false; BackToHome = $false }
+    exit 1
+}
+
 Dump-Buttons "initial"
 
 # -- Join ----------------------------------------------------------------------
 $joined = $false
 
-Write-Log "JoinMode=$JoinMode"
 # Recover from a dialog left open by a previous run
 for ($i = 0; $i -lt 3 -and -not (Has-Button "Join with an ID") -and (Has-Button "Back"); $i++) {
     Write-Log "Not on home screen - pressing Back"
     Invoke-Button "Back" | Out-Null
     Start-Sleep -Seconds 1
 }
-if ($JoinMode -eq "Calendar" -and (Has-Button "Join")) {
-    Write-Log "Found calendar 'Join' button - invoking..."
-    $joined = Invoke-Button "Join"
+if ($JoinMode -eq "Calendar") {
+    # The tile's Join appears shortly before the meeting starts; wait for it
+    $deadline = (Get-Date).AddSeconds($CalendarWaitSec)
+    while (-not (Has-Button "Join") -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 5 }
+    if (Has-Button "Join") {
+        Dump-Texts "calendar"
+        Write-Log "Found calendar 'Join' button - invoking..."
+        $joined = Invoke-Button "Join"
+    } else {
+        Write-Log "No calendar 'Join' button within $CalendarWaitSec s - is the test meeting on the room's calendar?" "WARN"
+        $joined = $false
+    }
 } else {
     $joined = Join-ByMeetingId -MeetingId $MeetingId -Passcode $Passcode
 }
 
 if (-not $joined) {
     Write-Log "Failed to join - aborting." "WARN"
-    Write-Result -Status "FAIL" -Message "Could not join (JoinMode=$JoinMode)" -Extra @{ Joined = $false; Left = $false; BackToHome = $false }
+    $why = if ($JoinMode -eq "Calendar") { "no Join button on the room's calendar" } else { "Join with an ID failed" }
+    Write-Result -Status "FAIL" -Message "Could not join ($why)" -Extra @{ Joined = $false; Left = $false; BackToHome = $false }
     exit 1
 }
 
@@ -290,7 +329,12 @@ $joinTime = Get-Date
 Write-Log "Polling for lobby admit buttons for up to 90s while call settles..."
 
 $pollDeadline = (Get-Date).AddSeconds(90)
+$actualMeetingId = ""
 while ((Get-Date) -lt $pollDeadline) {
+    if (-not $actualMeetingId) {
+        $actualMeetingId = Get-MeetingIdOnScreen
+        if ($actualMeetingId) { Write-Log "Meeting ID on screen: $actualMeetingId" }
+    }
     $allBtns = $AE::RootElement.FindAll($TF::Descendants, $allCond) | Where-Object {
         try { $_.Current.ControlType -eq [System.Windows.Automation.ControlType]::Button } catch { $false }
     }
@@ -313,7 +357,9 @@ Dump-Buttons "in-call"
 Dump-Texts "in-call"
 
 # -- Check hardware issues ------------------------------------------------------
-$issues = Check-InCallIssues
+# PowerShell unrolls the returned list (to an array, or $null when empty); rebuild it so .Add works
+$issues = [System.Collections.Generic.List[hashtable]]::new()
+foreach ($i in @(Check-InCallIssues)) { if ($i) { $issues.Add($i) } }
 if ($issues.Count -gt 0) {
     Write-Log "=== In-call issues ==="
     foreach ($i in $issues) { Write-Log "  [$($i.Severity)] $($i.Component): $($i.Message)" }
@@ -357,7 +403,15 @@ Write-Log "LeaveGone=$leaveGone  BackToHome=$backToHome  ConnectedSec=$connected
 
 # FAIL = the test call itself failed (join / leave / home screen).
 # Hardware findings only WARN: the Teams Rooms Pro portal owns hardware health.
+# Did the room join the meeting the observer joins?
+$wrongMeeting = $MeetingId -and $actualMeetingId -and ($actualMeetingId -ne $MeetingId)
+if ($MeetingId -and -not $actualMeetingId) {
+    $issues.Add(@{ Severity = "WARN"; Component = "Meeting"; Message = "Could not read the meeting ID on screen to confirm it is $MeetingId" })
+}
+
 if (-not $joined -or -not $left -or -not $backToHome) {
+    $status = "FAIL"
+} elseif ($wrongMeeting) {
     $status = "FAIL"
 } elseif ($issues.Count -gt 0) {
     $status = "WARN"
@@ -368,9 +422,10 @@ if (-not $joined -or -not $left -or -not $backToHome) {
 $issueList = $issues | ForEach-Object { "$($_.Component): $($_.Message)" }
 $message   = if ($status -eq "PASS") { "Joined, left and back on home screen. No issues." } `
              elseif ($status -eq "WARN") { "Joined, left and back on home screen. Hardware warnings: $($issueList -join '; ')" } `
+             elseif ($wrongMeeting) { "Joined the wrong meeting: $actualMeetingId, expected $MeetingId (check the room's calendar)" } `
              else { "Join=$joined Left=$left BackToHome=$backToHome Issues: $($issueList -join '; ')" }
 
 Write-Log "Result: $status - $message"
 Write-Result -Status $status -Message $message -ConnectedSeconds $connectedSeconds -Issues $issues `
-    -Extra @{ Joined = [bool]$joined; Left = [bool]$left; BackToHome = [bool]$backToHome }
+    -Extra @{ Joined = [bool]$joined; Left = [bool]$left; BackToHome = [bool]$backToHome; ActualMeetingId = $actualMeetingId }
 Write-Log "Diag9 done."

@@ -9,7 +9,13 @@ Setup (run once):
     playwright install chromium
 
 Usage:
-    python Check-CameraFeed.py
+    python Check-CameraFeed.py [room display name]
+
+The room's meeting comes from %USERPROFILE%\\mtr-rooms.json (not in the repo):
+    {"rooms": [{"room": "Boardroom Test Account", "joinMode": "Calendar",
+                "meetingId": "...", "passcode": "...",
+                "meetingUrl": "https://teams.microsoft.com/meet/<id>?p=<code>"}]}
+With no room argument (or MTR_ROOM_NAME), the first room is used.
 """
 
 import asyncio
@@ -25,13 +31,34 @@ from pathlib import Path
 from urllib.parse import urlparse, parse_qs, unquote
 from playwright.async_api import async_playwright
 
-# Navigate directly to the Teams web client URL, bypassing the launcher.html
-# page that triggers the "Open Microsoft Teams?" protocol handler dialog.
-# The /_#/meet/ path goes straight to the web join flow.
-MEETING_URL = "https://teams.microsoft.com/_#/meet/497737059187682?p=NnqALr74DBIi2oFvDT&anon=true"
-GUEST_NAME  = "MTR-Observer"
+ROOMS_CONFIG = Path(os.environ.get("USERPROFILE", "~")).expanduser() / "mtr-rooms.json"
+
+def web_join_url(url: str) -> str:
+    """Navigate directly to the Teams web client URL, bypassing the launcher.html
+    page that triggers the "Open Microsoft Teams?" protocol handler dialog.
+    https://teams.microsoft.com/meet/<id>?p=<code> -> .../_#/meet/<id>?p=<code>&anon=true
+    Other link forms (meetup-join) go through the launcher interception below."""
+    if "/meet/" in url and "/_#/" not in url:
+        url = url.replace("teams.microsoft.com/meet/", "teams.microsoft.com/_#/meet/")
+    if "/_#/meet/" in url and "anon=" not in url:
+        url += ("&" if "?" in url else "?") + "anon=true"
+    return url
+
+def load_room():
+    """The room to check and its meeting, from mtr-rooms.json."""
+    wanted = (sys.argv[1] if len(sys.argv) > 1 else os.environ.get("MTR_ROOM_NAME", "")).strip()
+    rooms = json.loads(ROOMS_CONFIG.read_text(encoding="utf-8-sig"))["rooms"]
+    for r in rooms:
+        if not wanted or r["room"].lower() == wanted.lower():
+            return r["room"], web_join_url(r["meetingUrl"])
+    raise SystemExit(f"Room '{wanted}' not found in {ROOMS_CONFIG}")
+
 # Only a live video on this participant's tile counts (other people's cameras don't)
-ROOM_NAME   = os.environ.get("MTR_ROOM_NAME", "Boardroom Test Account")
+ROOM_NAME, MEETING_URL = load_room()
+GUEST_NAME  = "MTR-Observer"
+# Picture thresholds (brightness 0-255): below these the room's video counts as no picture
+BLACK_MEAN  = 16
+FLAT_STD    = 6
 # Central results endpoint: { "url": "...", "reportToken": "..." } (not in the repo)
 ENDPOINT_CONFIG = Path(os.environ.get("USERPROFILE", "~")).expanduser() / "mtr-endpoint.json"
 # Why the run ended, for the endpoint report
@@ -46,7 +73,7 @@ def report_result(live: bool, reason: str):
         cfg  = json.loads(ENDPOINT_CONFIG.read_text(encoding="utf-8-sig"))
         body = json.dumps({
             "room": ROOM_NAME, "source": "observer",
-            "status": "LIVE" if live else "NO_FEED",
+            "status": "LIVE" if live else STATE.get("status", "NO_FEED"),
             "message": reason,
             "details": {"meetingUrl": MEETING_URL.split("?")[0], "guestName": GUEST_NAME},
         }).encode("utf-8")
@@ -106,12 +133,31 @@ async def check_live_video(page, room_name: str) -> tuple[bool, str]:
                     }
                     return '';
                 };
+                // Picture content: a playing stream can still be black (lens covered,
+                // camera fault). Sample a small frame: mean brightness + spread.
+                const frameStats = (v) => {
+                    try {
+                        const w = 64, h = 36, c = document.createElement('canvas');
+                        c.width = w; c.height = h;
+                        const g = c.getContext('2d', { willReadFrequently: true });
+                        g.drawImage(v, 0, 0, w, h);
+                        const d = g.getImageData(0, 0, w, h).data;
+                        let sum = 0, sq = 0, n = w * h;
+                        for (let i = 0; i < d.length; i += 4) {
+                            const y = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+                            sum += y; sq += y * y;
+                        }
+                        const mean = sum / n;
+                        return { mean: Math.round(mean), std: Math.round(Math.sqrt(Math.max(0, sq / n - mean * mean))) };
+                    } catch (e) { return { error: String(e) }; }
+                };
                 const streams = active.map(v => {
                     const label = tileLabel(v);
                     return {
                         size: v.videoWidth + 'x' + v.videoHeight,
                         label: label.slice(0, 80),
-                        isRoom: label.toLowerCase().includes(roomName.toLowerCase())
+                        isRoom: label.toLowerCase().includes(roomName.toLowerCase()),
+                        frame: frameStats(v)
                     };
                 });
                 return { total: all.length, streams: streams };
@@ -122,7 +168,16 @@ async def check_live_video(page, room_name: str) -> tuple[bool, str]:
         desc    = [f"{s['size']} '{s['label']}'" for s in streams]
         room    = [s for s in streams if s['isRoom']]
         if room:
-            return True, f"Live video from '{room_name}' ({room[0]['size']}); all live: {desc}"
+            f = room[0].get('frame') or {}
+            if 'error' in f:
+                return False, f"Video from '{room_name}' is playing but its picture could not be checked: {f['error']}"
+            # Brightness 0-255. Near-black (mean < BLACK_MEAN) or one flat colour
+            # (spread < FLAT_STD) = no usable picture.
+            if f['mean'] < BLACK_MEAN or f['std'] < FLAT_STD:
+                kind = "black" if f['mean'] < BLACK_MEAN else "a single flat colour"
+                return False, (f"Video from '{room_name}' is {kind} (brightness {f['mean']}, variation {f['std']}): "
+                               f"camera covered, off or faulty")
+            return True, f"Live picture from '{room_name}' ({room[0]['size']}, brightness {f['mean']}, variation {f['std']})"
         if streams:
             return False, f"Live video found but none from '{room_name}': {desc}"
         return False, f"No live video stream (found {total} video elements, none playing with dimensions)"
@@ -388,6 +443,8 @@ async def main():
         # 7 — analyse via DOM video element check (more reliable than pixel analysis)
         live, reason = await check_live_video(page, ROOM_NAME)
         STATE["reason"] = reason
+        if not live and "covered, off or faulty" in reason:
+            STATE["status"] = "BLACK"
         result_label = "CAMERA LIVE ✓" if live else "NO CAMERA FEED ✗"
         log("=" * 50, run_dir)
         log(f"RESULT: {result_label}", run_dir)
