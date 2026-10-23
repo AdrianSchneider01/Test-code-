@@ -3,13 +3,12 @@
 # the endpoint, pairs each room's MTR result with its observer (camera) result,
 # and emails one HTML summary. ASCII only (PS 5.1).
 #
-# Default: Google Workspace SMTP relay (smtp-relay.gmail.com), which accepts mail
-# from this machine's public IP without a password. One-time setup in Google Admin:
-#   Apps > Google Workspace > Gmail > Routing > SMTP relay service: allowed senders
-#   "Only addresses in my domains", "Only accept mail from the specified IP addresses"
-#   (this machine's public IP), "Require TLS encryption".
-# Alternative: smtp.gmail.com with an app password saved by scripts\New-GmailCredential.ps1:
-#   -SmtpServer smtp.gmail.com -CredFile "$env:USERPROFILE\gmail-cred.xml"
+# Default server: Google Workspace SMTP relay (smtp-relay.gmail.com). Busy's relay
+# rule "MTR Test EMail" (Google Admin > Gmail > Routing > SMTP relay service) has
+# "Require SMTP Authentication" ON, so pass -CredFile: the account has 2-Step
+# Verification, so Google needs an APP PASSWORD (534 5.7.9 otherwise), saved by
+# scripts\New-GmailCredential.ps1. An IP allow-list instead of a password only
+# suits a static IP (not a mobile connection: shared and changing).
 #
 # Usage:
 #   .\scripts\Send-MTRDailyReport.ps1                         # send today's report
