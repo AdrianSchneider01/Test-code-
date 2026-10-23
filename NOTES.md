@@ -10,7 +10,9 @@ Dated log of what was tried on the MTR and the result. Newest first.
 - Diag9 now: hardware findings = WARN, never FAIL (Pro portal owns hardware); FAIL = join/leave/home failed. Posts its result to the endpoint when `C:\MTR\mtr-config.json` exists.
 - `scripts/Install-MTRDailyTest.ps1` installed on the Boardroom MTR: task `MTRDailyTest` daily 07:00 as Skype (interactive), config readable by Skype + admins only, endpoint reachable from the MTR. The MTR's execution policy is Restricted: run the installer with `powershell -ExecutionPolicy Bypass -File`.
 - Test 14:19 (task started on the MTR, observer run separately 25 s later, no MTR-RunTestCall): MTR joined by ID, admitted observer, left, dismissed feedback, home; reported WARN (display + mic). Observer LIVE on 'Boardroom Test Account'. Report preview: 1 WARN.
-- Not done: Gmail credential file (Adrian), registering the laptop's observer/report tasks (`scripts/Register-CentralTasks.ps1`), first real email.
+- Email: smtp.gmail.com and smtp-relay.gmail.com both dropped the connection with the normal account password; stepping through AUTH LOGIN showed `534 5.7.9 Application-specific password required` (2-Step Verification is on). IP allow-listing the relay was rejected: this laptop's public IP is a shared, changing Vodafone mobile address. Adrian created relay rule "MTR Test EMail" (only addresses in my domains, SMTP auth ON, TLS off - suggest ON) and an app password, saved with `scripts/New-GmailCredential.ps1` (spaces kept; accepted).
+- First real email sent 14:4x via smtp-relay.gmail.com: "MTR daily test 2026-10-23: 0 PASS, 1 WARN, 0 FAIL, 0 MISSING".
+- Laptop tasks registered: "MTR Observer" 07:00:30 and "MTR Daily Report" 07:15 (relay + `-CredFile`). First scheduled run 2026-10-24; needs the laptop on and logged in.
 
 ## 2026-10-23 (late afternoon) - room and observer in the same meeting
 - Adrian set the lobby to "everyone can bypass" but could not see MTR-Observer in the lobby. Cause: they were in DIFFERENT meetings. The observer always joins meeting ID 497737059187682; Diag9 clicked the calendar tile's Join (an "AV Test" 12:00-7:00 pm entry, not that ID).
