@@ -1,10 +1,15 @@
 # scripts/Send-MTRDailyReport.ps1
 # Runs on the central machine after the daily tests. Reads today's results from
 # the endpoint, pairs each room's MTR result with its observer (camera) result,
-# and emails one HTML summary via Gmail SMTP. ASCII only (PS 5.1).
+# and emails one HTML summary. ASCII only (PS 5.1).
 #
-# One-time setup on the central machine (Google app password, never in the repo):
-#   Get-Credential adrian@busyintegration.com.au | Export-Clixml "$env:USERPROFILE\gmail-cred.xml"
+# Default: Google Workspace SMTP relay (smtp-relay.gmail.com), which accepts mail
+# from this machine's public IP without a password. One-time setup in Google Admin:
+#   Apps > Google Workspace > Gmail > Routing > SMTP relay service: allowed senders
+#   "Only addresses in my domains", "Only accept mail from the specified IP addresses"
+#   (this machine's public IP), "Require TLS encryption".
+# Alternative: smtp.gmail.com with an app password saved by scripts\New-GmailCredential.ps1:
+#   -SmtpServer smtp.gmail.com -CredFile "$env:USERPROFILE\gmail-cred.xml"
 #
 # Usage:
 #   .\scripts\Send-MTRDailyReport.ps1                         # send today's report
@@ -16,7 +21,9 @@ param(
     [datetime]$Since         = (Get-Date).Date,           # local midnight today
     [string[]]$ExpectedRooms = @(),                       # rooms that should have reported
     [string]  $EndpointFile  = "$env:USERPROFILE\mtr-endpoint.json",
-    [string]  $CredFile      = "$env:USERPROFILE\gmail-cred.xml",
+    [string]  $SmtpServer    = "smtp-relay.gmail.com",
+    [int]     $Port          = 587,
+    [string]  $CredFile      = "",                        # only for smtp.gmail.com with an app password
     [string]  $PreviewPath   = ""
 )
 
@@ -88,7 +95,10 @@ if ($PreviewPath) {
 }
 
 # -- Send -----------------------------------------------------------------------
-$cred = Import-Clixml $CredFile
-Send-MailMessage -SmtpServer "smtp.gmail.com" -Port 587 -UseSsl -Credential $cred `
-    -From $From -To $To -Subject $subject -Body $html -BodyAsHtml -Encoding UTF8
-Write-Host "Sent '$subject' to $($To -join ', ')"
+$mail = @{
+    SmtpServer = $SmtpServer; Port = $Port; UseSsl = $true
+    From = $From; To = $To; Subject = $subject; Body = $html; BodyAsHtml = $true; Encoding = [Text.Encoding]::UTF8
+}
+if ($CredFile) { $mail.Credential = Import-Clixml $CredFile }   # relay authenticates by IP instead
+Send-MailMessage @mail
+Write-Host "Sent '$subject' to $($To -join ', ') via $SmtpServer"
