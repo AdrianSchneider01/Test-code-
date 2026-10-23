@@ -45,20 +45,51 @@ foreach ($file in @("Diag9.ps1", "MTR-InjectUIAutomation.ps1", "MTR-TestCallHelp
     }
 }
 
-# -- 2b. Register interactive task (LogonType=Interactive runs in Skype Session 1) --
+# -- 2b. Read upcoming meeting URL from MTR's LocalState XML files ----------------
+Write-Log "Reading upcoming meeting URL from MTR..."
+$mtrMeetingUrl = Invoke-Command -Session $s -ScriptBlock {
+    $ls  = "C:\Users\Skype\AppData\Local\Packages\Microsoft.SkypeRoomSystem_8wekyb3d8bbwe\LocalState"
+    $pat = 'https://teams\.microsoft\.com/[^\s"''<>&]+'
+    $found = @()
+    foreach ($f in (Get-ChildItem $ls -Filter "*.xml" -ErrorAction SilentlyContinue)) {
+        try {
+            $txt = [System.IO.File]::ReadAllText($f.FullName)
+            foreach ($m in [regex]::Matches($txt, $pat)) {
+                $url = $m.Value
+                if ($url -match '/meet/') { $found += $url }
+            }
+        } catch {}
+    }
+    ($found | Select-Object -Unique | Select-Object -First 1)
+}
+$meetingId = $null; $meetingPasscode = $null
+if ($mtrMeetingUrl) {
+    Write-Log "Found meeting URL: $mtrMeetingUrl"
+    if ($mtrMeetingUrl -match '/meet/(\d+)') { $meetingId = $Matches[1] }
+    if ($mtrMeetingUrl -match '[?&]p=([^&"]+)')        { $meetingPasscode = $Matches[1] }
+    if ($mtrMeetingUrl -match '[?&]passcode=([^&"]+)') { $meetingPasscode = $Matches[1] }
+    Write-Log "Parsed -- MeetingId: $meetingId  Passcode: $(if($meetingPasscode){'(found)'}else{'(none)'})"
+} else {
+    Write-Log "No meeting URL found on MTR -- Diag9 will use its defaults"
+}
+
+# -- 2c. Register interactive task (LogonType=Interactive runs in Skype Session 1) --
 Write-Log "Registering $TaskName as Skype interactive task..."
 Invoke-Command -Session $s -ScriptBlock {
-    param($tn, $script, $log)
-    # Capture all output streams so failures inside the task are visible
-    $action    = New-ScheduledTaskAction -Execute "powershell.exe" `
-                     -Argument "-NoProfile -ExecutionPolicy Bypass -Command `"& '$script' *> '$log'`""
+    param($tn, $script, $log, $mid, $mpas)
+    # Build args; redirect all output streams to log so failures are visible
+    $diagArgs = "-NoProfile -ExecutionPolicy Bypass -Command `"& '$script'"
+    if ($mid)  { $diagArgs += " -MeetingId $mid" }
+    if ($mpas) { $diagArgs += " -Passcode $mpas" }
+    $diagArgs += " *> '$log'`""
+    $action    = New-ScheduledTaskAction -Execute "powershell.exe" -Argument $diagArgs
     $principal = New-ScheduledTaskPrincipal -UserId "Skype" -LogonType Interactive -RunLevel Limited
     $settings  = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Minutes 5) `
                      -MultipleInstances IgnoreNew
     Register-ScheduledTask -TaskName $tn -Action $action -Principal $principal `
         -Settings $settings -Force | Out-Null
     "Registered '$tn' (LogonType=Interactive, user=Skype)"
-} -ArgumentList $TaskName, "$MtrScriptDir\Diag9.ps1", "$MtrScriptDir\Diag9-log.txt"
+} -ArgumentList $TaskName, "$MtrScriptDir\Diag9.ps1", "$MtrScriptDir\Diag9-log.txt", $meetingId, $meetingPasscode
 
 # -- 3. Clear old result file, then trigger task -------------------------------
 Invoke-Command -Session $s -ScriptBlock {
@@ -77,7 +108,8 @@ Write-Log "Waiting ${JoinWaitSec}s for MTR to join meeting..."
 Start-Sleep -Seconds $JoinWaitSec
 
 Write-Log "Running camera check..."
-$camProc = Start-Process -FilePath $LocalPython -ArgumentList $LocalScript -PassThru -Wait -NoNewWindow
+$camArgs = if ($mtrMeetingUrl) { @($LocalScript, $mtrMeetingUrl) } else { @($LocalScript) }
+$camProc = Start-Process -FilePath $LocalPython -ArgumentList $camArgs -PassThru -Wait -NoNewWindow
 $camLive = ($camProc.ExitCode -eq 0)
 Write-Log "Camera check: $( if ($camLive) { 'LIVE OK' } else { 'NO FEED X' } )"
 

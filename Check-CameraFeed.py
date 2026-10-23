@@ -45,13 +45,22 @@ def web_join_url(url: str) -> str:
     return url
 
 def load_room():
-    """The room to check and its meeting, from mtr-rooms.json."""
-    wanted = (sys.argv[1] if len(sys.argv) > 1 else os.environ.get("MTR_ROOM_NAME", "")).strip()
-    rooms = json.loads(ROOMS_CONFIG.read_text(encoding="utf-8-sig"))["rooms"]
-    for r in rooms:
-        if not wanted or r["room"].lower() == wanted.lower():
-            return r["room"], web_join_url(r["meetingUrl"])
-    raise SystemExit(f"Room '{wanted}' not found in {ROOMS_CONFIG}")
+    """Return (room_name, meeting_url).
+    sys.argv[1] may be a URL (https://...) supplied by MTR-RunTestCall.ps1,
+    a room display name to look up in mtr-rooms.json, or absent.
+    Falls back: mtr-rooms.json first entry, then hardcoded constant URL."""
+    _FALLBACK_URL = "https://teams.microsoft.com/_#/meet/497737059187682?p=NnqALr74DBIi2oFvDT&anon=true"
+    arg = (sys.argv[1] if len(sys.argv) > 1 else os.environ.get("MTR_ROOM_NAME", "")).strip()
+    if arg.startswith("https://"):
+        return "MTR", web_join_url(arg)
+    if ROOMS_CONFIG.exists():
+        rooms = json.loads(ROOMS_CONFIG.read_text(encoding="utf-8-sig"))["rooms"]
+        for r in rooms:
+            if not arg or r["room"].lower() == arg.lower():
+                return r["room"], web_join_url(r["meetingUrl"])
+        if arg:
+            raise SystemExit(f"Room '{arg}' not found in {ROOMS_CONFIG}")
+    return "MTR", _FALLBACK_URL
 
 # Only a live video on this participant's tile counts (other people's cameras don't)
 ROOM_NAME, MEETING_URL = load_room()
