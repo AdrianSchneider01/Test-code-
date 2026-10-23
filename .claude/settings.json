@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(powershell.exe -ExecutionPolicy Bypass -File scripts/*)",
+      "Bash(powershell.exe -Command Get-*)",
+      "Read",
+      "Edit"
+    ],
+    "ask": [
+      "Bash(powershell.exe -Command Restart-Computer*)",
+      "Bash(powershell.exe -Command Set-*)"
+    ],
+    "deny": [
+      "Bash(powershell.exe -Command Remove-Item*)"
+    ]
+  }
+}

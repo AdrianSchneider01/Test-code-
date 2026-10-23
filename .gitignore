@@ -1,0 +1,6 @@
+results/
+mtr-cred.xml
+*.clixml
+CameraCheckOutput/
+__pycache__/
+*.pyc
