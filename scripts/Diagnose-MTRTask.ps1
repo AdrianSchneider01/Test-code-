@@ -46,7 +46,7 @@ Invoke-Command -Session $s {
     if (Test-Path $f) { Get-Content $f } else { "(not found)" }
 }
 
-Write-Host "`n=== UIA probe — what root windows are visible in this PS session? ===" -ForegroundColor Cyan
+Write-Host "`n=== UIA probe -- what root windows are visible in this PS session? ===" -ForegroundColor Cyan
 Invoke-Command -Session $s {
     Add-Type -AssemblyName UIAutomationClient
     Add-Type -AssemblyName UIAutomationTypes
