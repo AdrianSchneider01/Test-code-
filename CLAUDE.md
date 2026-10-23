@@ -20,8 +20,9 @@ Automate daily health checks and remote test calls on Microsoft Teams Rooms (Cre
 - `scripts/Invoke-MTRTest.ps1`: deploys a script as the launch hook, restarts the MTR, polls for `-DoneFile`, fetches `-FetchFiles` into `results\`, `-Cleanup` removes the hook
 - `endpoint/`: Cloudflare Worker `mtr-results` (https://mtr-results.adrian-ddf.workers.dev) + D1 `mtr-results`. Deploy with `npx wrangler deploy` from `endpoint/`. Tokens in `%USERPROFILE%\mtr-endpoint.json`; never print them.
 - `scripts/Install-MTRDailyTest.ps1`: run ON an MTR as Admin (`powershell -ExecutionPolicy Bypass -File`); installs Diag9 + `C:\MTR\mtr-config.json` + daily task `MTRDailyTest` (Skype, interactive)
-- `scripts/Send-MTRDailyReport.ps1`: central daily email via Gmail SMTP (`-PreviewPath` to write HTML without sending); credential in `%USERPROFILE%\gmail-cred.xml`
-- `scripts/Register-CentralTasks.ps1`: registers the central machine's "MTR Observer" (07:00:30) and "MTR Daily Report" (07:15) tasks
+- Daily report email: sent by the Worker at 07:15 Australia/Sydney (cron + `src/report.js` + `src/smtp.js` via smtp-relay.gmail.com:587, secret SMTP_PASSWORD = Google app password). Expected rooms and recipients are `vars` in `endpoint/wrangler.jsonc`; add every new room to EXPECTED_ROOMS or a silent room won't show as MISSING. Test with GET /report/preview or POST /report/send (read token).
+- `scripts/Send-MTRDailyReport.ps1`: local preview/manual send of the same report (`-PreviewPath`); not scheduled
+- `scripts/Register-CentralTasks.ps1`: registers the central machine's "MTR Observer" task (07:00:30) and disables the old local report task
 - `scripts/MTR-LeaveCall.ps1`: recovery helper that closes overlays and leaves a call on the MTR
 - `MTR-RunTestCall.ps1` also saves Diag9's output to `C:\MTR\Diag9-log.txt` on the MTR and prints it
 - `scripts/Diagnose-MTRTask.ps1`: checks the MTRTestCallTemp task config and session context, then runs a UIA probe in that session

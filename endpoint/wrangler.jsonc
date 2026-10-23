@@ -3,13 +3,29 @@
   "name": "mtr-results",
   "main": "src/index.js",
   "compatibility_date": "2025-09-01",
-  "observability": { "enabled": true },
+  "observability": { "enabled": true, "traces": { "enabled": true } },
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "mtr-results",
       "database_id": "cc1f4950-2789-4043-89e9-6c94546c1795"
     }
-  ]
-  // Secrets (wrangler secret put): REPORT_TOKEN, READ_TOKEN
+  ],
+  // 07:15 Sydney = 20:15 UTC in daylight time (AEDT), 21:15 UTC in standard time (AEST).
+  // Both fire; the handler only sends when the local hour is REPORT_HOUR.
+  "triggers": { "crons": ["15 20 * * *", "15 21 * * *"] },
+  "vars": {
+    "TZ_NAME": "Australia/Sydney",
+    "REPORT_HOUR": "07",
+    // Rooms that must report every day (Teams display names); a missing one shows as MISSING
+    "EXPECTED_ROOMS": ["Boardroom Test Account"],
+    "MAIL_FROM": "adrian@busyintegration.com.au",
+    "MAIL_TO": ["adrian@busyintegration.com.au"],
+    // Google Workspace SMTP relay, rule "MTR Test EMail" (Require SMTP Authentication)
+    "SMTP_HOST": "smtp-relay.gmail.com",
+    "SMTP_PORT": "587",
+    "SMTP_USER": "adrian@busyintegration.com.au",
+    "SMTP_HELO": "busyintegration.com.au"
+  }
+  // Secrets (wrangler secret put): REPORT_TOKEN, READ_TOKEN, SMTP_PASSWORD (Google app password)
 }

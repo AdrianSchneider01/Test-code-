@@ -1,10 +1,18 @@
-// mtr-results: collects daily test results from MTRs and the camera observer.
+// mtr-results: collects daily test results from MTRs and the camera observer,
+// and sends the daily report email itself (so it arrives even when a room or
+// the observer machine is off).
 //
 //   POST /results          Authorization: Bearer <REPORT_TOKEN>   body: JSON result
 //   GET  /results?since=   Authorization: Bearer <READ_TOKEN>     ISO time, default last 24 h
+//   GET  /report/preview   Authorization: Bearer <READ_TOKEN>     today's report as HTML
+//   POST /report/send      Authorization: Bearer <READ_TOKEN>     send today's report now
 //   GET  /health           no auth
+//   cron                   sends the report when it is REPORT_HOUR:xx in TZ_NAME
 //
 // Result body: { room, source: "mtr"|"observer", status, message, details? }
+
+import { buildReport, localTime } from "./report.js";
+import { sendMail } from "./smtp.js";
 
 const MAX_BODY = 64 * 1024;
 const SOURCES = ["mtr", "observer"];
@@ -76,6 +84,24 @@ async function getResults(request, env) {
   });
 }
 
+async function todaysReport(env, now = new Date()) {
+  const since = new Date(now.getTime() - 36 * 3600 * 1000).toISOString();
+  const { results } = await env.DB.prepare(
+    "SELECT room, source, status, message, received_at FROM results WHERE received_at >= ? ORDER BY received_at"
+  ).bind(since).all();
+  return buildReport(results, env.EXPECTED_ROOMS || [], now, env.TZ_NAME);
+}
+
+async function sendReport(env) {
+  const report = await todaysReport(env);
+  const transcript = await sendMail(
+    { host: env.SMTP_HOST, port: Number(env.SMTP_PORT), user: env.SMTP_USER,
+      password: (env.SMTP_PASSWORD || "").trim(), helo: env.SMTP_HELO },
+    { from: env.MAIL_FROM, to: env.MAIL_TO, subject: report.subject, html: report.html });
+  console.log(JSON.stringify({ event: "report_sent", subject: report.subject, transcript }));
+  return report;
+}
+
 export default {
   async fetch(request, env) {
     const { pathname } = new URL(request.url);
@@ -83,10 +109,33 @@ export default {
       if (pathname === "/health") return json({ ok: true });
       if (pathname === "/results" && request.method === "POST") return await postResult(request, env);
       if (pathname === "/results" && request.method === "GET") return await getResults(request, env);
+      if (pathname.startsWith("/report/")) {
+        if (!sameToken(bearer(request), env.READ_TOKEN)) return json({ error: "unauthorized" }, 401);
+        if (pathname === "/report/preview" && request.method === "GET") {
+          const r = await todaysReport(env);
+          return new Response(r.html, { headers: { "content-type": "text/html; charset=utf-8", "x-subject": r.subject } });
+        }
+        if (pathname === "/report/send" && request.method === "POST") {
+          const r = await sendReport(env);
+          return json({ ok: true, subject: r.subject, to: env.MAIL_TO });
+        }
+      }
       return json({ error: "not found" }, 404);
     } catch (err) {
-      console.error(err);
-      return json({ error: "internal error" }, 500);
+      console.error(JSON.stringify({ event: "error", path: pathname, error: String(err) }));
+      return json({ error: "internal error", detail: String(err).slice(0, 300) }, 500);
     }
+  },
+
+  // Cron runs at two UTC times so one of them is REPORT_HOUR local in both
+  // daylight-saving and standard time; only that one sends.
+  async scheduled(controller, env, ctx) {
+    const hour = localTime(new Date(controller.scheduledTime), env.TZ_NAME).slice(0, 2);
+    if (hour !== env.REPORT_HOUR) {
+      console.log(JSON.stringify({ event: "report_skipped", localHour: hour }));
+      return;
+    }
+    ctx.waitUntil(sendReport(env).catch((err) =>
+      console.error(JSON.stringify({ event: "report_failed", error: String(err) }))));
   },
 };

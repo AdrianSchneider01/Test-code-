@@ -2,6 +2,14 @@
 
 Dated log of what was tried on the MTR and the result. Newest first.
 
+## 2026-10-23 (15:30-16:00) - daily email sent by the Worker
+- Goal: an email even when the observer laptop (or the MTR) is off. The mtr-results Worker now builds and sends the report itself: cron "15 20 * * *" and "15 21 * * *" UTC, only the one at 07:xx Australia/Sydney sends (DST-proof).
+- Report rules: room with no result today = MISSING ("MTR off or offline, task did not run, or no internet"); missing observer result = camera not checked -> FAIL; no observer results at all -> red banner. Verified offline for: nothing reported, laptop off, MTR off, only yesterday's results.
+- Sending: Workers TCP sockets (cloudflare:sockets) STARTTLS to smtp-relay.gmail.com:587, AUTH LOGIN with the app password in Worker secret SMTP_PASSWORD (port 25 is blocked for Workers; 587 works).
+  - First secret paste had extra characters (21) -> 535 5.7.8 BadCredentials; re-entered (19 = 16 letters + spaces) -> sent.
+- Manual routes (read token): GET /report/preview, POST /report/send. Test email sent from the Worker 15:5x.
+- Laptop "MTR Daily Report" task disabled; the laptop now only runs "MTR Observer". Adrian deleted the old app password, so `%USERPROFILE%\gmail-cred.xml` is likely stale (only used for manual Send-MTRDailyReport.ps1 sends).
+
 ## 2026-10-23 (14:50-15:20) - automated runs, black-picture check, calendar mode
 - Runs from the scheduled tasks only (one-off triggers added to MTRDailyTest / MTR Observer / MTR Daily Report): 14:50 and 15:00 joined by ID, observer admitted, left, home, email sent. Camera picture was BLACK in both, but the check passed it (stream playing).
 - Black-picture check added to Check-CameraFeed: samples a 64x36 frame of the room's video; brightness < 16 or variation < 6 => status BLACK (camera FAIL in the email). 15:10 run: "black (brightness 0, variation 0)", email "0 PASS, 0 WARN, 1 FAIL".
