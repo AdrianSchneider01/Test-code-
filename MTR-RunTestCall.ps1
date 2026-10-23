@@ -16,7 +16,7 @@ $ScriptDir = $PSScriptRoot
 
 function Write-Log { param([string]$m) Write-Host "[$(Get-Date -f 'HH:mm:ss')] $m" }
 
-# ── 1. Connect ────────────────────────────────────────────────────────────────
+# -- 1. Connect ----------------------------------------------------------------
 Write-Log "Connecting to $MtrHost..."
 $credXml = "$env:USERPROFILE\mtr-cred.xml"
 if (Test-Path $credXml) {
@@ -33,7 +33,7 @@ try {
     exit 1
 }
 
-# ── 2. Deploy latest scripts to MTR ──────────────────────────────────────────
+# -- 2. Deploy latest scripts to MTR ------------------------------------------
 Write-Log "Deploying scripts to ${MtrHost}:${MtrScriptDir}..."
 Invoke-Command -Session $s -ScriptBlock { param($d) New-Item -ItemType Directory -Path $d -Force | Out-Null } -ArgumentList $MtrScriptDir
 
@@ -45,24 +45,25 @@ foreach ($file in @("Diag9.ps1", "MTR-InjectUIAutomation.ps1", "MTR-TestCallHelp
     }
 }
 
-# ── 2b. Register interactive task (LogonType=Interactive runs in Skype Session 1) ──
+# -- 2b. Register interactive task (LogonType=Interactive runs in Skype Session 1) --
 Write-Log "Registering $TaskName as Skype interactive task..."
 Invoke-Command -Session $s -ScriptBlock {
-    param($tn, $script)
+    param($tn, $script, $log)
+    # Capture all output streams so failures inside the task are visible
     $action    = New-ScheduledTaskAction -Execute "powershell.exe" `
-                     -Argument "-NoProfile -ExecutionPolicy Bypass -File $script"
+                     -Argument "-NoProfile -ExecutionPolicy Bypass -Command `"& '$script' *> '$log'`""
     $principal = New-ScheduledTaskPrincipal -UserId "Skype" -LogonType Interactive -RunLevel Limited
     $settings  = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Minutes 5) `
                      -MultipleInstances IgnoreNew
     Register-ScheduledTask -TaskName $tn -Action $action -Principal $principal `
         -Settings $settings -Force | Out-Null
     "Registered '$tn' (LogonType=Interactive, user=Skype)"
-} -ArgumentList $TaskName, "$MtrScriptDir\Diag9.ps1"
+} -ArgumentList $TaskName, "$MtrScriptDir\Diag9.ps1", "$MtrScriptDir\Diag9-log.txt"
 
-# ── 3. Clear old result file, then trigger task ───────────────────────────────
+# -- 3. Clear old result file, then trigger task -------------------------------
 Invoke-Command -Session $s -ScriptBlock {
-    param($f) Remove-Item $f -ErrorAction SilentlyContinue
-} -ArgumentList "$MtrScriptDir\TestCallResult.json"
+    param($files) foreach ($f in $files) { Remove-Item $f -ErrorAction SilentlyContinue }
+} -ArgumentList (,@("$MtrScriptDir\TestCallResult.json", "$MtrScriptDir\Diag9-log.txt"))
 
 Write-Log "Starting task '$TaskName' on $MtrHost..."
 Invoke-Command -Session $s -ScriptBlock {
@@ -71,16 +72,16 @@ Invoke-Command -Session $s -ScriptBlock {
 } -ArgumentList $TaskName
 Write-Log "Task triggered."
 
-# ── 4. Wait for MTR to join, then run camera check locally ───────────────────
+# -- 4. Wait for MTR to join, then run camera check locally -------------------
 Write-Log "Waiting ${JoinWaitSec}s for MTR to join meeting..."
 Start-Sleep -Seconds $JoinWaitSec
 
 Write-Log "Running camera check..."
 $camProc = Start-Process -FilePath $LocalPython -ArgumentList $LocalScript -PassThru -Wait -NoNewWindow
 $camLive = ($camProc.ExitCode -eq 0)
-Write-Log "Camera check: $( if ($camLive) { 'LIVE ✓' } else { 'NO FEED ✗' } )"
+Write-Log "Camera check: $( if ($camLive) { 'LIVE OK' } else { 'NO FEED X' } )"
 
-# ── 5. Poll for MTR-side result (task may still be running) ──────────────────
+# -- 5. Poll for MTR-side result (task may still be running) ------------------
 Write-Log "Waiting for MTR result file (up to 120s)..."
 $r = $null
 $deadline = (Get-Date).AddSeconds(120)
@@ -100,9 +101,14 @@ if ($r) {
     Write-Log "MTR result: timed out waiting for result file"
 }
 
+Write-Log "--- Diag9 log (MTR) ---"
+Invoke-Command -Session $s -ScriptBlock {
+    param($f) if (Test-Path $f) { Get-Content $f } else { "(no log at $f)" }
+} -ArgumentList "$MtrScriptDir\Diag9-log.txt" | ForEach-Object { Write-Host "  $_" }
+
 Remove-PSSession $s
 
-# ── 6. Summary ────────────────────────────────────────────────────────────────
+# -- 6. Summary ----------------------------------------------------------------
 $mtrStatus  = if ($r) { $r.Status } else { "TIMEOUT" }
 $overall    = if ($camLive -and $mtrStatus -eq "PASS") { "PASS" } `
               elseif ($camLive -and $mtrStatus -eq "WARN") { "WARN" } `

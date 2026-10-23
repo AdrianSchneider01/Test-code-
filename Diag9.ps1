@@ -34,14 +34,23 @@ $allCond = [System.Windows.Automation.Condition]::TrueCondition
 
 function Write-Log { param([string]$m, [string]$l="INFO"); Write-Host "[$(Get-Date -f 'HH:mm:ss')][$l] $m" }
 
+# Teams Rooms (WebView2) buttons have no AutomationId and generated class names,
+# and each tile has a Text label with the same Name. Match ControlType=Button + exact Name.
+function Get-ButtonCondition {
+    param([string]$Name)
+    New-Object System.Windows.Automation.AndCondition(
+        (New-Object $PC($AE::ControlTypeProperty, [System.Windows.Automation.ControlType]::Button)),
+        (New-Object $PC($NAM, $Name)))
+}
+
 function Has-Button {
     param([string]$Name)
-    $null -ne $AE::RootElement.FindFirst($TF::Descendants, (New-Object $PC($NAM, $Name)))
+    $null -ne $AE::RootElement.FindFirst($TF::Descendants, (Get-ButtonCondition $Name))
 }
 
 function Invoke-Button {
     param([string]$Name)
-    $btn = $AE::RootElement.FindFirst($TF::Descendants, (New-Object $PC($NAM, $Name)))
+    $btn = $AE::RootElement.FindFirst($TF::Descendants, (Get-ButtonCondition $Name))
     if ($btn -and $btn.Current.IsEnabled) {
         try { $btn.GetCurrentPattern($IPP).Invoke(); Write-Log "Invoked '$Name'"; return $true }
         catch { Write-Log "InvokePattern failed for '$Name': $_" "WARN" }
@@ -70,7 +79,7 @@ function Dump-Buttons {
 function Join-ByMeetingId {
     param([string]$MeetingId, [string]$Passcode)
 
-    Write-Log "No calendar meeting — trying 'Join with an ID'..."
+    Write-Log "No calendar meeting - trying 'Join with an ID'..."
     if (-not (Invoke-Button "Join with an ID")) {
         Write-Log "Could not click 'Join with an ID'" "WARN"
         return $false
@@ -170,18 +179,18 @@ New-Item -ItemType Directory -Path (Split-Path $ResultFile) -Force | Out-Null
 
 Dump-Buttons "initial"
 
-# ── Join ──────────────────────────────────────────────────────────────────────
+# -- Join ----------------------------------------------------------------------
 $joined = $false
 
 if (Has-Button "Join") {
-    Write-Log "Found calendar 'Join' button — invoking..."
+    Write-Log "Found calendar 'Join' button - invoking..."
     $joined = Invoke-Button "Join"
 } else {
     $joined = Join-ByMeetingId -MeetingId $MeetingId -Passcode $Passcode
 }
 
 if (-not $joined) {
-    Write-Log "Failed to join — aborting." "WARN"
+    Write-Log "Failed to join - aborting." "WARN"
     Write-Result -Status "FAIL" -Message "Could not find a Join button (no calendar meeting and Join-with-ID failed)"
     exit 1
 }
@@ -198,7 +207,7 @@ while ((Get-Date) -lt $pollDeadline) {
         try {
             $name = $b.Current.Name
             if ($name -match '(?i)\badmit\b') {
-                Write-Log "Lobby: found admit button '$name' — clicking"
+                Write-Log "Lobby: found admit button '$name' - clicking"
                 try { $b.GetCurrentPattern($IPP).Invoke(); Write-Log "Admitted." }
                 catch { Write-Log "Admit invoke failed: $_" "WARN" }
             }
@@ -209,7 +218,7 @@ while ((Get-Date) -lt $pollDeadline) {
 
 Dump-Buttons "in-call"
 
-# ── Check hardware issues ──────────────────────────────────────────────────────
+# -- Check hardware issues ------------------------------------------------------
 $issues = Check-InCallIssues
 if ($issues.Count -gt 0) {
     Write-Log "=== In-call issues ==="
@@ -218,7 +227,7 @@ if ($issues.Count -gt 0) {
     Write-Log "No in-call issues detected."
 }
 
-# ── Leave ─────────────────────────────────────────────────────────────────────
+# -- Leave ---------------------------------------------------------------------
 Write-Log "=== Attempting to leave ==="
 $leftViaUIA = $false
 foreach ($leaveLabel in @("Leave", "Leave call", "Hang up", "End call")) {
@@ -232,9 +241,16 @@ if (-not $leftViaUIA) {
 Write-Log "Waiting 10s for leave to take effect..."
 Start-Sleep -Seconds 10
 
+# Post-call feedback prompt ("Had issues" / "Good" / "Dismiss") blocks the home screen
+if (Has-Button "Dismiss") {
+    Write-Log "Post-call feedback prompt shown - dismissing"
+    Invoke-Button "Dismiss" | Out-Null
+    Start-Sleep -Seconds 5
+}
+
 Dump-Buttons "after-leave"
 
-# ── Result ────────────────────────────────────────────────────────────────────
+# -- Result --------------------------------------------------------------------
 $connectedSeconds = [int]((Get-Date) - $joinTime).TotalSeconds
 $leaveGone        = -not (Has-Button "Leave")
 $backToHome       = (Has-Button "Meet now") -or (Has-Button "Join with an ID")

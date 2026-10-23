@@ -3,11 +3,21 @@
 # Deployed to C:\Rigel\AdminHookScripts\Launch.ps1
 # Runs automatically in the Skype session via ScriptLaunch.ps1
 # Dumps all UI Automation elements to a text file
+#
+# ScriptLaunch.ps1 runs this file INSTEAD of the real Launch.ps1,
+# so the real one is started first in the background (it launches
+# Teams Rooms and never exits), then the UI is scanned once loaded.
 # ============================================================
 
 $OutputFile  = "C:\Users\Skype\UIElements.txt"
 $LogFile     = "C:\Users\Skype\Discovery-Log.txt"
 $ErrorFile   = "C:\Users\Skype\Discovery-Error.txt"
+$RealLaunch  = "C:\Users\Skype\ScriptLaunchCache\Launch.ps1"
+
+# Scan attempts: wait for the home screen buttons before dumping
+$ScanAttempts    = 10
+$ScanIntervalSec = 30
+$HomeMarkers     = @("Join", "Meet now", "Join with an ID")
 
 $ErrorActionPreference = "Continue"
 
@@ -21,6 +31,8 @@ function Write-Err($msg) {
     "$ts $msg" | Out-File $ErrorFile -Append -Encoding UTF8
 }
 
+$launchProc = $null
+
 try {
     Write-Log "=== MTR-UIDiscovery started ==="
     Write-Log "Running as : $env:USERNAME"
@@ -28,9 +40,13 @@ try {
     Write-Log "PID        : $PID"
     Write-Log "Output     : $OutputFile"
 
-    # Wait for Teams Rooms app to fully load before scanning UI
-    Write-Log "Waiting 30 seconds for Teams Rooms app to fully load..."
-    Start-Sleep -Seconds 30
+    # Start the real Launch.ps1 so Teams Rooms comes up
+    if (Test-Path $RealLaunch) {
+        $launchProc = Start-Process PowerShell.exe -ArgumentList @("-ExecutionPolicy", "Unrestricted", "-File", $RealLaunch) -WindowStyle Hidden -PassThru
+        Write-Log "Started real Launch.ps1 (PID $($launchProc.Id))"
+    } else {
+        Write-Log "WARNING: Real Launch.ps1 not found at $RealLaunch"
+    }
 
     # Load UI Automation assemblies
     Write-Log "Loading UIAutomation assemblies..."
@@ -41,11 +57,26 @@ try {
     } catch {
         Write-Log "ERROR loading assemblies: $_"
         Write-Err "Assembly load failed: $_"
-
-        # Also run the original Launch.ps1 from ScriptLaunchCache so MTR still works
-        Write-Log "Falling through to original Launch.ps1"
-        exit 0
+        throw
     }
+
+    $root = [System.Windows.Automation.AutomationElement]::RootElement
+    $condition = [System.Windows.Automation.Condition]::TrueCondition
+
+    # Wait for the Teams Rooms home screen before scanning
+    $homeFound = $false
+    for ($i = 1; $i -le $ScanAttempts -and -not $homeFound; $i++) {
+        Write-Log "Waiting $ScanIntervalSec s for home screen (attempt $i of $ScanAttempts)..."
+        Start-Sleep -Seconds $ScanIntervalSec
+        try {
+            $names = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, $condition) | ForEach-Object { $_.Current.Name }
+            $hit = $HomeMarkers | Where-Object { $names -contains $_ } | Select-Object -First 1
+            if ($hit) { $homeFound = $true; Write-Log "Home screen detected ('$hit')" }
+        } catch {
+            Write-Log "Probe error: $_"
+        }
+    }
+    if (-not $homeFound) { Write-Log "WARNING: home screen markers not found; scanning anyway" }
 
     $output = [System.Collections.Generic.List[string]]::new()
     $output.Add("=" * 80)
@@ -55,18 +86,6 @@ try {
     $output.Add("Session ID : $([System.Diagnostics.Process]::GetCurrentProcess().SessionId)")
     $output.Add("=" * 80)
     $output.Add("")
-
-    # Get root element
-    Write-Log "Getting root automation element..."
-    $root = [System.Windows.Automation.AutomationElement]::RootElement
-    if ($null -eq $root) {
-        Write-Log "ERROR: Root element is null"
-        Write-Err "Root element is null"
-        exit 0
-    }
-    Write-Log "Root element OK"
-
-    $condition = [System.Windows.Automation.Condition]::TrueCondition
 
     # ---- TOP LEVEL WINDOWS ----
     $output.Add("--- TOP LEVEL WINDOWS ---")
@@ -194,15 +213,12 @@ try {
 Write-Log "=== MTR-UIDiscovery completed ==="
 
 # ============================================================
-# IMPORTANT: After discovery, run the real Launch.ps1 so the
-# MTR continues to function normally
+# IMPORTANT: Never exit. The real Launch.ps1 keeps running in the
+# background; exiting may make the shell try to relaunch us.
 # ============================================================
-Write-Log "Handing off to original ScriptLaunchCache Launch.ps1..."
-$realLaunch = "C:\Users\Skype\ScriptLaunchCache\Launch.ps1"
-if (Test-Path $realLaunch) {
-    & PowerShell.exe -ExecutionPolicy Unrestricted $realLaunch
-} else {
-    Write-Log "WARNING: Real Launch.ps1 not found at $realLaunch"
-    # Keep session alive so MTR doesn't restart
-    while ($true) { Start-Sleep -Seconds 3600 }
+if ($launchProc) {
+    Write-Log "Waiting on real Launch.ps1 (PID $($launchProc.Id))..."
+    $launchProc.WaitForExit()
+    Write-Log "WARNING: real Launch.ps1 exited with code $($launchProc.ExitCode)"
 }
+while ($true) { Start-Sleep -Seconds 3600 }

@@ -17,14 +17,20 @@ Automate daily health checks and remote test calls on Microsoft Teams Rooms (Cre
 - `Diag9.ps1`: runs ON the MTR (via MTRTestCallTemp scheduled task); uses UI Automation to click Join, polls for and admits lobby participants, checks in-call hardware state, leaves the call, writes `C:\MTR\TestCallResult.json`
 - `MTR-InjectUIAutomation.ps1`: SYSTEM-level helper that bridges Session 0 → Skype session; used for cross-session UIA injection (kept for reference — see known facts below)
 - `MTR-TestCallHelper.ps1`: UIA join/leave helper spawned in the Skype session (kept for reference)
-- `scripts/Invoke-MTRTest.ps1`: deploys a script as the launch hook, restarts the MTR, waits, pulls back logs and output
+- `scripts/Invoke-MTRTest.ps1`: deploys a script as the launch hook, restarts the MTR, polls for `-DoneFile`, fetches `-FetchFiles` into `results\`, `-Cleanup` removes the hook
+- `MTR-RunTestCall.ps1` also saves Diag9's output to `C:\MTR\Diag9-log.txt` on the MTR and prints it
 - `scripts/Diagnose-MTRTask.ps1`: checks the MTRTestCallTemp task config and session context, then runs a UIA probe in that session
-- `MTR-UIDiscovery.ps1`: launch-hook script that dumps all UI Automation elements (plus Join button candidates) to `C:\Users\Skype\UIElements.txt`, then hands off to `C:\Users\Skype\ScriptLaunchCache\Launch.ps1`
+- `MTR-UIDiscovery.ps1`: launch-hook script that starts the real Launch.ps1, waits for the home screen, then dumps all UI Automation elements (plus Join button candidates) to `C:\Users\Skype\UIElements.txt`
 - `Run-MTRDiscoveryRemote.ps1`: original menu-driven deploy/fetch/restore for UI discovery. Interactive (Get-Credential, Read-Host), so kept for reference only; use `scripts\Invoke-MTRTest.ps1` instead
 - Not in this repo yet: `MTR-HealthCheck.ps1` (daily 7am health check email) and `Setup-MTRHealthCheckTask.ps1`
 
 ## Known facts (don't retry failed approaches)
-- Code that needs the Teams UI MUST run via `C:\Rigel\AdminHookScripts\Launch.ps1`. It runs in the Skype session before launch.
+- Code that needs the Teams UI runs in the Skype session (session 1), either via the MTRTestCallInteractive task (LogonType=Interactive, user Skype) or as `C:\Rigel\AdminHookScripts\Launch.ps1`.
+- A hook `Launch.ps1` REPLACES the real `C:\Users\Skype\ScriptLaunchCache\Launch.ps1`. It must start the real one itself (background) and never exit, or Teams Rooms won't load. Remove the hook after testing (`Invoke-MTRTest.ps1 -Cleanup`).
+- Teams Rooms UI is WebView2: buttons have NO AutomationId and generated class names. Match ControlType=Button + exact Name. Home tiles also have a Text element with the same Name.
+- After Leave, a post-call feedback prompt (Had issues / Good / Dismiss) covers the home screen; invoke "Dismiss".
+- Every .ps1 deployed to the MTR must be ASCII-only (no em-dashes, box-drawing chars, check marks). PS 5.1 reads BOM-less UTF-8 as ANSI and the script fails to parse.
+- `LocalState\Logs.txt` does not exist on this Teams Rooms build.
 - Cross-session injection via WTSQueryUserToken FAILS. Shell Launcher kills the process.
 - WinRM only works with Basic auth plus `.\Admin`. NTLM failed.
 - `[data-tid='toggle-video']` in Teams pre-join is an INPUT[role=switch]; checking `.checked` via JS is unreliable — check "Your camera is turned off" UI text or aria-label containing "not available" instead.
