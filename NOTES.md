@@ -2,6 +2,17 @@
 
 Dated log of what was tried on the MTR and the result. Newest first.
 
+## 2026-10-23 (late afternoon) - room and observer in the same meeting
+- Adrian set the lobby to "everyone can bypass" but could not see MTR-Observer in the lobby. Cause: they were in DIFFERENT meetings. The observer always joins meeting ID 497737059187682; Diag9 clicked the calendar tile's Join (an "AV Test" 12:00-7:00 pm entry, not that ID).
+- Diag9 now has `-JoinMode Id|Calendar` (default Id): joins $MeetingId via "Join with an ID" so both sides are in the same meeting. Learned along the way:
+  - "Join with an ID" first shows a provider picker (teams / zoom / googlemeet / Back); click "teams".
+  - The form has 2 edit fields. ValuePattern.SetValue does not fire web input events, so "Join Teams meeting" stays disabled. Focus + SendKeys works.
+  - Failed attempts press Back; Diag9 also presses Back at start if a previous run left a dialog open.
+- Check-CameraFeed.py lobby fixes: Teams now says "Someone will let you in shortly" / "...when the meeting starts" (old selector only matched "soon"), and `[data-tid='hangup-button']` no longer exists, so admission was never detected. Now: Leave button visible or lobby text gone.
+- Diag9 dumps on-screen texts when admitting and in-call. In-call screen shows "AV Test", organiser "Adrian Schneider I Busy Integration", "Meeting ID: 497737059187682", "1:50 pm - 8:50 pm".
+- Test call 13:40: Join=True (by ID), observer admitted after 5 s, CAMERA LIVE 1280x720 showing tile "Boardroom Test Account" (People: 2), Left=True, BackToHome=True. Overall FAIL only because Teams on the room reports "No microphone was found" (+ WARN monitor disconnected).
+- Caveat: at 13:31 the camera check said LIVE while the MTR had NOT joined (someone else's video). Camera check counts any live video; it should check the tile name is "Boardroom Test Account".
+
 ## 2026-10-23 (afternoon)
 - `ScriptLaunch.ps1` runs `C:\Rigel\AdminHookScripts\Launch.ps1` INSTEAD of the real `ScriptLaunchCache\Launch.ps1` (which launches Teams Rooms and loops forever). Old `MTR-UIDiscovery.ps1` scanned before Teams launched. Fixed: start the real Launch.ps1 in the background first, scan once home buttons appear (took ~3 min after boot), never exit.
 - UI discovery via `Invoke-MTRTest.ps1` worked (hook ran as Skype, session 1). Result: Teams Rooms is WebView2 (`TeamsWebView`); buttons have NO AutomationId and generated Fluent class names. Each home tile has a Button and a Text with the same Name. Diag9 now matches ControlType=Button + exact Name.

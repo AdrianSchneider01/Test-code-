@@ -287,7 +287,8 @@ async def main():
         for lobby_sel in [
             "text=You're in the lobby",
             "text=Waiting for someone to let you in",
-            "text=Someone will let you in soon",
+            # substring match: "...let you in soon/shortly/when the meeting starts"
+            "text=Someone will let you in",
             "[data-tid='prejoin-waiting-for-host']",
         ]:
             try:
@@ -303,10 +304,14 @@ async def main():
             admitted = False
             for i in range(24):  # poll every 5s, up to 2 min
                 await page.wait_for_timeout(5000)
+                # In-call: a "Leave" button shows and the lobby text is gone
+                # (the old [data-tid='hangup-button'] no longer exists in Teams web)
                 try:
-                    if await page.locator("[data-tid='hangup-button']").is_visible(timeout=1000):
+                    leave_visible = await page.get_by_role("button", name="Leave").first.is_visible()
+                    lobby_visible = await page.locator("text=Someone will let you in").first.is_visible()
+                    if leave_visible or not lobby_visible:
                         admitted = True
-                        log(f"Admitted from lobby after {(i+1)*5}s", run_dir)
+                        log(f"Admitted from lobby after {(i+1)*5}s (leave={leave_visible}, lobby={lobby_visible})", run_dir)
                         break
                 except Exception:
                     pass

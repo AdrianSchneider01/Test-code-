@@ -6,6 +6,10 @@ param(
     [string]$ResultFile = "C:\MTR\TestCallResult.json",
     [string]$MeetingId  = "497737059187682",
     [string]$Passcode   = "NnqALr74DBIi2oFvDT",
+    # Id: join $MeetingId via "Join with an ID" (same meeting as the camera observer).
+    # Calendar: click the calendar tile's Join (meeting may differ from $MeetingId).
+    [ValidateSet("Id", "Calendar")]
+    [string]$JoinMode   = "Id",
     [int]$HangupX       = 975,
     [int]$HangupY       = 712
 )
@@ -76,15 +80,31 @@ function Dump-Buttons {
     }
 }
 
+# Text elements show the meeting title, participant tiles and lobby names
+function Dump-Texts {
+    param([string]$Label)
+    Write-Log "=== Texts [$Label] ==="
+    $textCond = New-Object $PC($AE::ControlTypeProperty, [System.Windows.Automation.ControlType]::Text)
+    foreach ($t in $AE::RootElement.FindAll($TF::Descendants, $textCond)) {
+        try { if ($t.Current.Name.Trim()) { Write-Log "    '$($t.Current.Name)'" } } catch {}
+    }
+}
+
 function Join-ByMeetingId {
     param([string]$MeetingId, [string]$Passcode)
 
-    Write-Log "No calendar meeting - trying 'Join with an ID'..."
+    Write-Log "Joining meeting $MeetingId via 'Join with an ID'..."
     if (-not (Invoke-Button "Join with an ID")) {
         Write-Log "Could not click 'Join with an ID'" "WARN"
         return $false
     }
     Start-Sleep -Seconds 2
+
+    # First screen is a platform picker (teams / zoom / googlemeet / Back)
+    if (Has-Button "teams") {
+        Invoke-Button "teams" | Out-Null
+        Start-Sleep -Seconds 2
+    }
 
     # Dump what appeared so we can see the field names
     Dump-Buttons "join-with-id-dialog"
@@ -99,25 +119,48 @@ function Join-ByMeetingId {
     })
     Write-Log "Found $($edits.Count) edit field(s) in Join-with-ID dialog"
 
-    if ($edits.Count -ge 1) {
+    # ValuePattern.SetValue does not fire the web page's input events, so the
+    # Join button stays disabled. Focus each field and type real keystrokes.
+    # (SendKeys special chars + ^ % ~ ( ) { } [ ] would need escaping; ID and passcode are alphanumeric.)
+    Add-Type -AssemblyName System.Windows.Forms
+    $fields = @(@($MeetingId, "meeting ID"), @($Passcode, "passcode"))
+    for ($i = 0; $i -lt [Math]::Min($edits.Count, 2); $i++) {
+        $text = $fields[$i][0]; $what = $fields[$i][1]
+        if (-not $text) { continue }
         try {
-            $edits[0].GetCurrentPattern($VP).SetValue($MeetingId)
-            Write-Log "Set meeting ID: $MeetingId"
-        } catch { Write-Log "Failed to set meeting ID: $_" "WARN" }
-    }
-    if ($edits.Count -ge 2 -and $Passcode) {
-        try {
-            $edits[1].GetCurrentPattern($VP).SetValue($Passcode)
-            Write-Log "Set passcode"
-        } catch { Write-Log "Failed to set passcode: $_" "WARN" }
+            $edits[$i].SetFocus()
+            Start-Sleep -Milliseconds 300
+            [System.Windows.Forms.SendKeys]::SendWait("^a")
+            [System.Windows.Forms.SendKeys]::SendWait($text)
+            Write-Log "Typed $what"
+        } catch { Write-Log "Failed to type ${what}: $_" "WARN" }
     }
 
-    Start-Sleep -Seconds 1
+    # Wait for the join button to enable
+    $deadline = (Get-Date).AddSeconds(5)
+    while ((Get-Date) -lt $deadline) {
+        $jb = $AE::RootElement.FindFirst($TF::Descendants, (Get-ButtonCondition "Join Teams meeting"))
+        if ($jb -and $jb.Current.IsEnabled) { break }
+        Start-Sleep -Milliseconds 500
+    }
 
-    foreach ($label in @("Join meeting", "Join", "Continue", "OK")) {
-        if (Invoke-Button $label) { Write-Log "Clicked '$label'"; return $true }
+    # The calendar tile's "Join" may still be in the tree behind the dialog;
+    # the dialog comes later in tree order, so take the LAST enabled match.
+    foreach ($label in @("Join Teams meeting", "Join meeting", "Join", "Continue", "OK")) {
+        $btn = @($AE::RootElement.FindAll($TF::Descendants, (Get-ButtonCondition $label)) |
+                 Where-Object { $_.Current.IsEnabled }) | Select-Object -Last 1
+        if ($btn) {
+            try {
+                $r = $btn.Current.BoundingRectangle
+                $btn.GetCurrentPattern($IPP).Invoke()
+                Write-Log "Clicked '$label' at ($([int]$r.X),$([int]$r.Y))"
+                return $true
+            } catch { Write-Log "InvokePattern failed for '$label': $_" "WARN" }
+        }
     }
     Write-Log "Could not find a Join button after entering meeting ID" "WARN"
+    # Back out of the dialog so the room is not left on it
+    for ($i = 0; $i -lt 3 -and (Has-Button "Back"); $i++) { Invoke-Button "Back" | Out-Null; Start-Sleep -Seconds 1 }
     return $false
 }
 
@@ -182,7 +225,14 @@ Dump-Buttons "initial"
 # -- Join ----------------------------------------------------------------------
 $joined = $false
 
-if (Has-Button "Join") {
+Write-Log "JoinMode=$JoinMode"
+# Recover from a dialog left open by a previous run
+for ($i = 0; $i -lt 3 -and -not (Has-Button "Join with an ID") -and (Has-Button "Back"); $i++) {
+    Write-Log "Not on home screen - pressing Back"
+    Invoke-Button "Back" | Out-Null
+    Start-Sleep -Seconds 1
+}
+if ($JoinMode -eq "Calendar" -and (Has-Button "Join")) {
     Write-Log "Found calendar 'Join' button - invoking..."
     $joined = Invoke-Button "Join"
 } else {
@@ -191,7 +241,7 @@ if (Has-Button "Join") {
 
 if (-not $joined) {
     Write-Log "Failed to join - aborting." "WARN"
-    Write-Result -Status "FAIL" -Message "Could not find a Join button (no calendar meeting and Join-with-ID failed)"
+    Write-Result -Status "FAIL" -Message "Could not join (JoinMode=$JoinMode)"
     exit 1
 }
 
@@ -207,6 +257,7 @@ while ((Get-Date) -lt $pollDeadline) {
         try {
             $name = $b.Current.Name
             if ($name -match '(?i)\badmit\b') {
+                Dump-Texts "lobby-notification"
                 Write-Log "Lobby: found admit button '$name' - clicking"
                 try { $b.GetCurrentPattern($IPP).Invoke(); Write-Log "Admitted." }
                 catch { Write-Log "Admit invoke failed: $_" "WARN" }
@@ -217,6 +268,7 @@ while ((Get-Date) -lt $pollDeadline) {
 }
 
 Dump-Buttons "in-call"
+Dump-Texts "in-call"
 
 # -- Check hardware issues ------------------------------------------------------
 $issues = Check-InCallIssues

@@ -29,6 +29,8 @@ Automate daily health checks and remote test calls on Microsoft Teams Rooms (Cre
 - A hook `Launch.ps1` REPLACES the real `C:\Users\Skype\ScriptLaunchCache\Launch.ps1`. It must start the real one itself (background) and never exit, or Teams Rooms won't load. Remove the hook after testing (`Invoke-MTRTest.ps1 -Cleanup`).
 - Teams Rooms UI is WebView2: buttons have NO AutomationId and generated class names. Match ControlType=Button + exact Name. Home tiles also have a Text element with the same Name.
 - After Leave, a post-call feedback prompt (Had issues / Good / Dismiss) covers the home screen; invoke "Dismiss".
+- The MTR must join by meeting ID (Diag9 `-JoinMode Id`, default), not the calendar tile, so it is in the same meeting as the observer. "Join with an ID" opens a provider picker first (click "teams"); type into the fields with SendKeys (ValuePattern.SetValue leaves "Join Teams meeting" disabled).
+- Teams web lobby text is "Someone will let you in shortly/when the meeting starts"; `[data-tid='hangup-button']` no longer exists (use the "Leave" button role).
 - Every .ps1 deployed to the MTR must be ASCII-only (no em-dashes, box-drawing chars, check marks). PS 5.1 reads BOM-less UTF-8 as ANSI and the script fails to parse.
 - `LocalState\Logs.txt` does not exist on this Teams Rooms build.
 - Cross-session injection via WTSQueryUserToken FAILS. Shell Launcher kills the process.
