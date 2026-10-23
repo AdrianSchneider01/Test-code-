@@ -6,7 +6,7 @@ param(
     [string]$MtrHost      = "192.168.1.209",
     [string]$MtrUser      = "Admin",
     [string]$MtrScriptDir = "C:\MTR",
-    [string]$TaskName     = "MTRTestCallTemp",
+    [string]$TaskName     = "MTRTestCallInteractive",
     [string]$LocalPython  = "C:\Users\adria\AppData\Local\Python\pythoncore-3.14-64\python.exe",
     [string]$LocalScript  = "$PSScriptRoot\Check-CameraFeed.py",
     [int]   $JoinWaitSec  = 25    # seconds to wait for MTR to join before browser check
@@ -45,7 +45,25 @@ foreach ($file in @("Diag9.ps1", "MTR-InjectUIAutomation.ps1", "MTR-TestCallHelp
     }
 }
 
-# ── 3. Trigger scheduled task on MTR ─────────────────────────────────────────
+# ── 2b. Register interactive task (LogonType=Interactive runs in Skype Session 1) ──
+Write-Log "Registering $TaskName as Skype interactive task..."
+Invoke-Command -Session $s -ScriptBlock {
+    param($tn, $script)
+    $action    = New-ScheduledTaskAction -Execute "powershell.exe" `
+                     -Argument "-NoProfile -ExecutionPolicy Bypass -File $script"
+    $principal = New-ScheduledTaskPrincipal -UserId "Skype" -LogonType Interactive -RunLevel Limited
+    $settings  = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Minutes 5) `
+                     -MultipleInstances IgnoreNew
+    Register-ScheduledTask -TaskName $tn -Action $action -Principal $principal `
+        -Settings $settings -Force | Out-Null
+    "Registered '$tn' (LogonType=Interactive, user=Skype)"
+} -ArgumentList $TaskName, "$MtrScriptDir\Diag9.ps1"
+
+# ── 3. Clear old result file, then trigger task ───────────────────────────────
+Invoke-Command -Session $s -ScriptBlock {
+    param($f) Remove-Item $f -ErrorAction SilentlyContinue
+} -ArgumentList "$MtrScriptDir\TestCallResult.json"
+
 Write-Log "Starting task '$TaskName' on $MtrHost..."
 Invoke-Command -Session $s -ScriptBlock {
     param($task)
