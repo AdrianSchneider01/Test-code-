@@ -18,6 +18,11 @@ Automate daily health checks and remote test calls on Microsoft Teams Rooms (Cre
 - `MTR-InjectUIAutomation.ps1`: SYSTEM-level helper that bridges Session 0 → Skype session; used for cross-session UIA injection (kept for reference — see known facts below)
 - `MTR-TestCallHelper.ps1`: UIA join/leave helper spawned in the Skype session (kept for reference)
 - `scripts/Invoke-MTRTest.ps1`: deploys a script as the launch hook, restarts the MTR, polls for `-DoneFile`, fetches `-FetchFiles` into `results\`, `-Cleanup` removes the hook
+- `endpoint/`: Cloudflare Worker `mtr-results` (https://mtr-results.adrian-ddf.workers.dev) + D1 `mtr-results`. Deploy with `npx wrangler deploy` from `endpoint/`. Tokens in `%USERPROFILE%\mtr-endpoint.json`; never print them.
+- `scripts/Install-MTRDailyTest.ps1`: run ON an MTR as Admin (`powershell -ExecutionPolicy Bypass -File`); installs Diag9 + `C:\MTR\mtr-config.json` + daily task `MTRDailyTest` (Skype, interactive)
+- `scripts/Send-MTRDailyReport.ps1`: central daily email via Gmail SMTP (`-PreviewPath` to write HTML without sending); credential in `%USERPROFILE%\gmail-cred.xml`
+- `scripts/Register-CentralTasks.ps1`: registers the central machine's "MTR Observer" (07:00:30) and "MTR Daily Report" (07:15) tasks
+- `scripts/MTR-LeaveCall.ps1`: recovery helper that closes overlays and leaves a call on the MTR
 - `MTR-RunTestCall.ps1` also saves Diag9's output to `C:\MTR\Diag9-log.txt` on the MTR and prints it
 - `scripts/Diagnose-MTRTask.ps1`: checks the MTRTestCallTemp task config and session context, then runs a UIA probe in that session
 - `MTR-UIDiscovery.ps1`: launch-hook script that starts the real Launch.ps1, waits for the home screen, then dumps all UI Automation elements (plus Join button candidates) to `C:\Users\Skype\UIElements.txt`
@@ -33,6 +38,9 @@ Automate daily health checks and remote test calls on Microsoft Teams Rooms (Cre
 - Teams web lobby text is "Someone will let you in shortly/when the meeting starts"; `[data-tid='hangup-button']` no longer exists (use the "Leave" button role).
 - Every .ps1 deployed to the MTR must be ASCII-only (no em-dashes, box-drawing chars, check marks). PS 5.1 reads BOM-less UTF-8 as ANSI and the script fails to parse.
 - `LocalState\Logs.txt` does not exist on this Teams Rooms build.
+- Diag9 status: FAIL = join/leave/home failed; hardware findings only WARN (the Teams Rooms Pro portal owns hardware health).
+- The MTR's PowerShell execution policy is Restricted; remote script runs need `Set-ExecutionPolicy -Scope Process Bypass` first.
+- Cloudflare 403s Python's default urllib user agent; set a User-Agent on requests to the Worker.
 - Cross-session injection via WTSQueryUserToken FAILS. Shell Launcher kills the process.
 - WinRM only works with Basic auth plus `.\Admin`. NTLM failed.
 - `[data-tid='toggle-video']` in Teams pre-join is an INPUT[role=switch]; checking `.checked` via JS is unreliable — check "Your camera is turned off" UI text or aria-label containing "not available" instead.

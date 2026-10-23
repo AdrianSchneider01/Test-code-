@@ -14,7 +14,10 @@ Usage:
 
 import asyncio
 import ctypes
+import json
+import os
 import subprocess
+import urllib.request
 import sys
 import time
 from datetime import datetime
@@ -27,6 +30,35 @@ from playwright.async_api import async_playwright
 # The /_#/meet/ path goes straight to the web join flow.
 MEETING_URL = "https://teams.microsoft.com/_#/meet/497737059187682?p=NnqALr74DBIi2oFvDT&anon=true"
 GUEST_NAME  = "MTR-Observer"
+# Only a live video on this participant's tile counts (other people's cameras don't)
+ROOM_NAME   = os.environ.get("MTR_ROOM_NAME", "Boardroom Test Account")
+# Central results endpoint: { "url": "...", "reportToken": "..." } (not in the repo)
+ENDPOINT_CONFIG = Path(os.environ.get("USERPROFILE", "~")).expanduser() / "mtr-endpoint.json"
+# Why the run ended, for the endpoint report
+STATE = {"reason": "Observer did not finish"}
+
+def report_result(live: bool, reason: str):
+    """Send the camera result to the central endpoint, if configured."""
+    if not ENDPOINT_CONFIG.exists():
+        log(f"No {ENDPOINT_CONFIG} - not reporting to endpoint")
+        return
+    try:
+        cfg  = json.loads(ENDPOINT_CONFIG.read_text(encoding="utf-8-sig"))
+        body = json.dumps({
+            "room": ROOM_NAME, "source": "observer",
+            "status": "LIVE" if live else "NO_FEED",
+            "message": reason,
+            "details": {"meetingUrl": MEETING_URL.split("?")[0], "guestName": GUEST_NAME},
+        }).encode("utf-8")
+        req = urllib.request.Request(
+            cfg["url"].rstrip("/") + "/results", data=body, method="POST",
+            # Cloudflare blocks Python's default "Python-urllib" user agent (HTTP 403)
+            headers={"Content-Type": "application/json", "Authorization": f"Bearer {cfg['reportToken']}",
+                     "User-Agent": "mtr-observer/1.0"})
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            log(f"Reported to endpoint (HTTP {resp.status})")
+    except Exception as e:
+        log(f"Failed to report to endpoint: {e}")
 OUTPUT_ROOT = Path(__file__).parent / "CameraCheckOutput"
 LOG_FILE    = OUTPUT_ROOT / "camera_log.txt"
 
@@ -43,15 +75,20 @@ def log(msg, run_dir=None):
         with open(run_dir / "run_log.txt", "a", encoding="utf-8") as f:
             f.write(line + "\n")
 
-async def check_live_video(page) -> tuple[bool, str]:
+async def check_live_video(page, room_name: str) -> tuple[bool, str]:
     """
     Inspect the DOM for active <video> elements with real dimensions.
     A playing remote camera stream has videoWidth > 0 and readyState >= 2.
     Pixel analysis was unreliable — Teams UI elements caused false positives.
+
+    Each active video is matched to its participant tile: the nearest ancestor
+    that contains only this one <video> and some text/aria-label. Only a live
+    video whose tile names room_name counts, so another participant's camera
+    can't produce a false LIVE.
     """
     try:
         result = await page.evaluate("""
-            () => {
+            (roomName) => {
                 const all = Array.from(document.querySelectorAll('video'));
                 const active = all.filter(v =>
                     !v.paused &&
@@ -59,18 +96,35 @@ async def check_live_video(page) -> tuple[bool, str]:
                     v.videoWidth > 50 &&
                     v.videoHeight > 50
                 );
-                return {
-                    total: all.length,
-                    active: active.length,
-                    widths: active.map(v => v.videoWidth + 'x' + v.videoHeight)
+                const tileLabel = (v) => {
+                    let el = v.parentElement;
+                    for (let i = 0; el && i < 15; i++, el = el.parentElement) {
+                        if (el.querySelectorAll('video').length > 1) break;  // left this tile
+                        const text = [el.getAttribute('aria-label') || '', el.innerText || '']
+                            .join(' ').replace(/\\s+/g, ' ').trim();
+                        if (text) return text;
+                    }
+                    return '';
                 };
+                const streams = active.map(v => {
+                    const label = tileLabel(v);
+                    return {
+                        size: v.videoWidth + 'x' + v.videoHeight,
+                        label: label.slice(0, 80),
+                        isRoom: label.toLowerCase().includes(roomName.toLowerCase())
+                    };
+                });
+                return { total: all.length, streams: streams };
             }
-        """)
-        total  = result.get('total', 0)
-        active = result.get('active', 0)
-        widths = result.get('widths', [])
-        if active > 0:
-            return True, f"Live video stream detected ({active} active stream(s): {widths})"
+        """, room_name)
+        total   = result.get('total', 0)
+        streams = result.get('streams', [])
+        desc    = [f"{s['size']} '{s['label']}'" for s in streams]
+        room    = [s for s in streams if s['isRoom']]
+        if room:
+            return True, f"Live video from '{room_name}' ({room[0]['size']}); all live: {desc}"
+        if streams:
+            return False, f"Live video found but none from '{room_name}': {desc}"
         return False, f"No live video stream (found {total} video elements, none playing with dimensions)"
     except Exception as e:
         return False, f"Video DOM check error: {e}"
@@ -279,6 +333,7 @@ async def main():
 
         if not joined:
             log("ERROR: could not find Join button", run_dir)
+            STATE["reason"] = "Observer could not find the Join button on the pre-join screen"
             await browser.close()
             return False
 
@@ -319,6 +374,7 @@ async def main():
             if not admitted:
                 log("ERROR: timed out waiting for lobby admission", run_dir)
                 await page.screenshot(path=str(run_dir / "03_lobby_timeout.png"))
+                STATE["reason"] = "Observer was not admitted from the lobby within 2 minutes"
                 await browser.close()
                 return False
 
@@ -330,7 +386,8 @@ async def main():
         log(f"In-call screenshot: {shot}", run_dir)
 
         # 7 — analyse via DOM video element check (more reliable than pixel analysis)
-        live, reason = await check_live_video(page)
+        live, reason = await check_live_video(page, ROOM_NAME)
+        STATE["reason"] = reason
         result_label = "CAMERA LIVE ✓" if live else "NO CAMERA FEED ✗"
         log("=" * 50, run_dir)
         log(f"RESULT: {result_label}", run_dir)
@@ -357,5 +414,10 @@ async def main():
         return live
 
 if __name__ == "__main__":
-    result = asyncio.run(main())
+    try:
+        result = asyncio.run(main())
+    except Exception as e:
+        result = False
+        STATE["reason"] = f"Observer error: {e}"
+    report_result(bool(result), STATE["reason"])
     sys.exit(0 if result else 1)

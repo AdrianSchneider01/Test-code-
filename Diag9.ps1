@@ -4,6 +4,7 @@
 
 param(
     [string]$ResultFile = "C:\MTR\TestCallResult.json",
+    [string]$ConfigFile = "C:\MTR\mtr-config.json",
     [string]$MeetingId  = "497737059187682",
     [string]$Passcode   = "NnqALr74DBIi2oFvDT",
     # Id: join $MeetingId via "Join with an ID" (same meeting as the camera observer).
@@ -76,6 +77,24 @@ function Dump-Buttons {
                     try { Write-Log "    '$($b.Current.Name)' Enabled=$($b.Current.IsEnabled)" } catch {}
                 }
             }
+        } catch {}
+    }
+}
+
+# Overlay panels (e.g. "Close meeting room info") hide all in-call buttons.
+# Their close buttons START with "Close "; the hardware warning banners' close
+# buttons END with "Close" and must stay (they are how issues are detected).
+function Close-Overlays {
+    $btns = $AE::RootElement.FindAll($TF::Descendants, $allCond) | Where-Object {
+        try { $_.Current.ControlType -eq [System.Windows.Automation.ControlType]::Button -and
+              $_.Current.Name -like "Close *" } catch { $false }
+    }
+    foreach ($b in $btns) {
+        try {
+            $n = $b.Current.Name
+            $b.GetCurrentPattern($IPP).Invoke()
+            Write-Log "Closed overlay '$n'"
+            Start-Sleep -Seconds 1
         } catch {}
     }
 }
@@ -204,16 +223,38 @@ function Click-HangupButton {
 }
 
 function Write-Result {
-    param([string]$Status, [string]$Message, [int]$ConnectedSeconds=0, [array]$Issues=@())
-    $issueList = $Issues | ForEach-Object { "$($_.Severity) $($_.Component): $($_.Message)" }
-    @{
+    param([string]$Status, [string]$Message, [int]$ConnectedSeconds=0, [array]$Issues=@(), [hashtable]$Extra=@{})
+    $result = @{
         Status           = $Status
         Message          = $Message
         ConnectedSeconds = $ConnectedSeconds
         Timestamp        = (Get-Date -f "o")
+        JoinMode         = $JoinMode
+        MeetingId        = $MeetingId
         Issues           = @($Issues | ForEach-Object { [PSCustomObject]$_ })
-    } | ConvertTo-Json -Depth 3 | Set-Content $ResultFile -Encoding UTF8
+    }
+    foreach ($k in $Extra.Keys) { $result[$k] = $Extra[$k] }
+    $result | ConvertTo-Json -Depth 3 | Set-Content $ResultFile -Encoding UTF8
     Write-Log "Written result '$Status' to $ResultFile"
+    Send-Result $result
+}
+
+# Report the result to the central endpoint (outbound HTTPS) when configured.
+# C:\MTR\mtr-config.json: { "url": "...", "reportToken": "...", "room": "..." }
+function Send-Result {
+    param([hashtable]$Result)
+    if (-not (Test-Path $ConfigFile)) { Write-Log "No $ConfigFile - not reporting to endpoint"; return }
+    try {
+        $cfg = Get-Content $ConfigFile -Raw | ConvertFrom-Json
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        $body = @{ room = $cfg.room; source = "mtr"; status = $Result.Status; message = $Result.Message; details = $Result } |
+                ConvertTo-Json -Depth 4
+        $null = Invoke-RestMethod -Uri "$($cfg.url)/results" -Method Post -ContentType "application/json" `
+                    -Headers @{ Authorization = "Bearer $($cfg.reportToken)" } -Body $body -TimeoutSec 30
+        Write-Log "Reported '$($Result.Status)' to $($cfg.url) as room '$($cfg.room)'"
+    } catch {
+        Write-Log "Failed to report to endpoint: $_" "WARN"
+    }
 }
 
 # ==== MAIN ====
@@ -241,7 +282,7 @@ if ($JoinMode -eq "Calendar" -and (Has-Button "Join")) {
 
 if (-not $joined) {
     Write-Log "Failed to join - aborting." "WARN"
-    Write-Result -Status "FAIL" -Message "Could not join (JoinMode=$JoinMode)"
+    Write-Result -Status "FAIL" -Message "Could not join (JoinMode=$JoinMode)" -Extra @{ Joined = $false; Left = $false; BackToHome = $false }
     exit 1
 }
 
@@ -267,6 +308,7 @@ while ((Get-Date) -lt $pollDeadline) {
     Start-Sleep -Seconds 5
 }
 
+Close-Overlays
 Dump-Buttons "in-call"
 Dump-Texts "in-call"
 
@@ -282,8 +324,11 @@ if ($issues.Count -gt 0) {
 # -- Leave ---------------------------------------------------------------------
 Write-Log "=== Attempting to leave ==="
 $leftViaUIA = $false
-foreach ($leaveLabel in @("Leave", "Leave call", "Hang up", "End call")) {
-    if (Invoke-Button $leaveLabel) { $leftViaUIA = $true; break }
+for ($attempt = 1; $attempt -le 2 -and -not $leftViaUIA; $attempt++) {
+    if ($attempt -eq 2) { Write-Log "Leave not found - closing overlays and retrying"; Close-Overlays }
+    foreach ($leaveLabel in @("Leave", "Leave call", "Hang up", "End call")) {
+        if (Has-Button $leaveLabel) { if (Invoke-Button $leaveLabel) { $leftViaUIA = $true; break } }
+    }
 }
 if (-not $leftViaUIA) {
     Write-Log "UIA Leave not found - trying mouse click fallback..."
@@ -310,9 +355,9 @@ $left             = $leaveGone -or $backToHome
 
 Write-Log "LeaveGone=$leaveGone  BackToHome=$backToHome  ConnectedSec=$connectedSeconds"
 
-if (-not $joined -or -not $left) {
-    $status = "FAIL"
-} elseif ($issues.Count -gt 0 -and ($issues | Where-Object { $_.Severity -eq "FAIL" })) {
+# FAIL = the test call itself failed (join / leave / home screen).
+# Hardware findings only WARN: the Teams Rooms Pro portal owns hardware health.
+if (-not $joined -or -not $left -or -not $backToHome) {
     $status = "FAIL"
 } elseif ($issues.Count -gt 0) {
     $status = "WARN"
@@ -320,11 +365,12 @@ if (-not $joined -or -not $left) {
     $status = "PASS"
 }
 
-$issueList = $issues | ForEach-Object { "$($_.Severity) $($_.Component): $($_.Message)" }
-$message   = if ($status -eq "PASS") { "Joined and left successfully. No issues." } `
-             elseif ($status -eq "WARN") { "Joined and left. Warnings: $($issueList -join '; ')" } `
-             else { "Join=$joined Left=$left Issues: $($issueList -join '; ')" }
+$issueList = $issues | ForEach-Object { "$($_.Component): $($_.Message)" }
+$message   = if ($status -eq "PASS") { "Joined, left and back on home screen. No issues." } `
+             elseif ($status -eq "WARN") { "Joined, left and back on home screen. Hardware warnings: $($issueList -join '; ')" } `
+             else { "Join=$joined Left=$left BackToHome=$backToHome Issues: $($issueList -join '; ')" }
 
 Write-Log "Result: $status - $message"
-Write-Result -Status $status -Message $message -ConnectedSeconds $connectedSeconds -Issues $issues
+Write-Result -Status $status -Message $message -ConnectedSeconds $connectedSeconds -Issues $issues `
+    -Extra @{ Joined = [bool]$joined; Left = [bool]$left; BackToHome = [bool]$backToHome }
 Write-Log "Diag9 done."

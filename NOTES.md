@@ -2,6 +2,16 @@
 
 Dated log of what was tried on the MTR and the result. Newest first.
 
+## 2026-10-23 (14:00-14:30) - test call independent of the laptop + results endpoint
+- Results endpoint deployed: Cloudflare Worker `mtr-results` at https://mtr-results.adrian-ddf.workers.dev with D1 database `mtr-results` (Busy Cloudflare account). POST /results needs the report token, GET /results the read token; tokens in `%USERPROFILE%\mtr-endpoint.json` (not in repo). Smoke test: 401 without token, 401 with the wrong token type, write + read OK.
+  - Gotcha: piping a secret into `wrangler secret put` from PowerShell stored a trailing CR; the Worker now trims secrets.
+  - Gotcha: Cloudflare returns 403 to Python's default `Python-urllib` user agent; the observer sends `User-Agent: mtr-observer/1.0`.
+- Email: busyintegration.com.au DNS is at dnspackage.com and mail is Google Workspace, so Cloudflare email sending is out. Daily email = Gmail SMTP from the central machine (`scripts/Send-MTRDailyReport.ps1`), sender adrian@busyintegration.com.au with an app password in `%USERPROFILE%\gmail-cred.xml`.
+- Diag9 now: hardware findings = WARN, never FAIL (Pro portal owns hardware); FAIL = join/leave/home failed. Posts its result to the endpoint when `C:\MTR\mtr-config.json` exists.
+- `scripts/Install-MTRDailyTest.ps1` installed on the Boardroom MTR: task `MTRDailyTest` daily 07:00 as Skype (interactive), config readable by Skype + admins only, endpoint reachable from the MTR. The MTR's execution policy is Restricted: run the installer with `powershell -ExecutionPolicy Bypass -File`.
+- Test 14:19 (task started on the MTR, observer run separately 25 s later, no MTR-RunTestCall): MTR joined by ID, admitted observer, left, dismissed feedback, home; reported WARN (display + mic). Observer LIVE on 'Boardroom Test Account'. Report preview: 1 WARN.
+- Not done: Gmail credential file (Adrian), registering the laptop's observer/report tasks (`scripts/Register-CentralTasks.ps1`), first real email.
+
 ## 2026-10-23 (late afternoon) - room and observer in the same meeting
 - Adrian set the lobby to "everyone can bypass" but could not see MTR-Observer in the lobby. Cause: they were in DIFFERENT meetings. The observer always joins meeting ID 497737059187682; Diag9 clicked the calendar tile's Join (an "AV Test" 12:00-7:00 pm entry, not that ID).
 - Diag9 now has `-JoinMode Id|Calendar` (default Id): joins $MeetingId via "Join with an ID" so both sides are in the same meeting. Learned along the way:

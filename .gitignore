@@ -4,3 +4,8 @@ mtr-cred.xml
 CameraCheckOutput/
 __pycache__/
 *.pyc
+
+endpoint/node_modules/
+endpoint/.wrangler/
+mtr-endpoint.json
+gmail-cred.xml

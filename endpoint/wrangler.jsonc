@@ -1,0 +1,15 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "mtr-results",
+  "main": "src/index.js",
+  "compatibility_date": "2025-09-01",
+  "observability": { "enabled": true },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "mtr-results",
+      "database_id": "cc1f4950-2789-4043-89e9-6c94546c1795"
+    }
+  ]
+  // Secrets (wrangler secret put): REPORT_TOKEN, READ_TOKEN
+}
