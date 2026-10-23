@@ -3,8 +3,8 @@
 # latest scripts, triggers the test call, then runs the camera check locally.
 
 param(
-    [string]$MtrHost      = "C4-54B20393935E",
-    [string]$MtrUser      = "C4-54B20393935E\Admin",
+    [string]$MtrHost      = "192.168.1.209",
+    [string]$MtrUser      = "Admin",
     [string]$MtrScriptDir = "C:\MTR",
     [string]$TaskName     = "MTRTestCallTemp",
     [string]$LocalPython  = "C:\Users\adria\AppData\Local\Python\pythoncore-3.14-64\python.exe",
@@ -18,8 +18,13 @@ function Write-Log { param([string]$m) Write-Host "[$(Get-Date -f 'HH:mm:ss')] $
 
 # ── 1. Connect ────────────────────────────────────────────────────────────────
 Write-Log "Connecting to $MtrHost..."
-$pw   = ConvertTo-SecureString "sfb" -AsPlainText -Force
-$cred = New-Object PSCredential($MtrUser, $pw)
+$credXml = "$env:USERPROFILE\mtr-cred.xml"
+if (Test-Path $credXml) {
+    $cred = Import-Clixml $credXml
+} else {
+    $pw   = ConvertTo-SecureString "sfb" -AsPlainText -Force
+    $cred = New-Object PSCredential($MtrUser, $pw)
+}
 try {
     $s = New-PSSession -ComputerName $MtrHost -Credential $cred -ErrorAction Stop
     Write-Log "Connected."
