@@ -1,13 +1,13 @@
-# Diag9 (clean): MTR test call via companion app UIA
-# Join: invoke 'Join' button (calendar meeting) in companion app
-# Leave: invoke 'Leave' button (in-call control) in companion app
-# Fallback leave: mouse click on hang-up button at known screen coordinates
+# Diag9: MTR test call via companion app UIA
+# Join: calendar "Join" button first; falls back to "Join with an ID" if no meeting on screen.
+# Leave: invoke Leave/Hang up; fallback mouse click.
 
 param(
-    [string]$JoinUrl    = "",       # passed by MTR-InjectUIAutomation.ps1, not used here
     [string]$ResultFile = "C:\MTR\TestCallResult.json",
-    [int]$HangupX       = 975,      # hang-up button X at 1024x768
-    [int]$HangupY       = 712       # hang-up button Y at 1024x768
+    [string]$MeetingId  = "497737059187682",
+    [string]$Passcode   = "NnqALr74DBIi2oFvDT",
+    [int]$HangupX       = 975,
+    [int]$HangupY       = 712
 )
 
 Add-Type @"
@@ -29,6 +29,7 @@ $TF      = [System.Windows.Automation.TreeScope]
 $PC      = [System.Windows.Automation.PropertyCondition]
 $NAM     = $AE::NameProperty
 $IPP     = [System.Windows.Automation.InvokePattern]::Pattern
+$VP      = [System.Windows.Automation.ValuePattern]::Pattern
 $allCond = [System.Windows.Automation.Condition]::TrueCondition
 
 function Write-Log { param([string]$m, [string]$l="INFO"); Write-Host "[$(Get-Date -f 'HH:mm:ss')][$l] $m" }
@@ -66,6 +67,51 @@ function Dump-Buttons {
     }
 }
 
+function Join-ByMeetingId {
+    param([string]$MeetingId, [string]$Passcode)
+
+    Write-Log "No calendar meeting — trying 'Join with an ID'..."
+    if (-not (Invoke-Button "Join with an ID")) {
+        Write-Log "Could not click 'Join with an ID'" "WARN"
+        return $false
+    }
+    Start-Sleep -Seconds 2
+
+    # Dump what appeared so we can see the field names
+    Dump-Buttons "join-with-id-dialog"
+
+    # Find all editable text fields
+    $editCond = New-Object $PC(
+        [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
+        [System.Windows.Automation.ControlType]::Edit
+    )
+    $edits = @($AE::RootElement.FindAll($TF::Descendants, $editCond) | Where-Object {
+        try { $null -ne $_.GetCurrentPattern($VP) } catch { $false }
+    })
+    Write-Log "Found $($edits.Count) edit field(s) in Join-with-ID dialog"
+
+    if ($edits.Count -ge 1) {
+        try {
+            $edits[0].GetCurrentPattern($VP).SetValue($MeetingId)
+            Write-Log "Set meeting ID: $MeetingId"
+        } catch { Write-Log "Failed to set meeting ID: $_" "WARN" }
+    }
+    if ($edits.Count -ge 2 -and $Passcode) {
+        try {
+            $edits[1].GetCurrentPattern($VP).SetValue($Passcode)
+            Write-Log "Set passcode"
+        } catch { Write-Log "Failed to set passcode: $_" "WARN" }
+    }
+
+    Start-Sleep -Seconds 1
+
+    foreach ($label in @("Join meeting", "Join", "Continue", "OK")) {
+        if (Invoke-Button $label) { Write-Log "Clicked '$label'"; return $true }
+    }
+    Write-Log "Could not find a Join button after entering meeting ID" "WARN"
+    return $false
+}
+
 function Check-InCallIssues {
     $issues = [System.Collections.Generic.List[hashtable]]::new()
     $allBtns = $AE::RootElement.FindAll($TF::Descendants, $allCond) | Where-Object {
@@ -75,22 +121,18 @@ function Check-InCallIssues {
         try {
             $name    = $b.Current.Name
             $enabled = $b.Current.IsEnabled
-            # Notification banners (dismissable "Close" buttons whose name contains the full banner text)
             if ($name -match "monitors?\s+(is|are)\s+disconnected") {
                 $issues.Add(@{ Severity="WARN"; Component="Display";     Message="Monitor disconnected" }) }
             if ($name -match "^No Microphone") {
                 $issues.Add(@{ Severity="FAIL"; Component="Microphone";  Message="No microphone detected" }) }
             if ($name -match "^No Camera|^Camera.*not found") {
                 $issues.Add(@{ Severity="FAIL"; Component="Camera";      Message="No camera detected" }) }
-            # Camera button state
             if ($name -eq "Turn camera on"  -and -not $enabled) {
                 $issues.Add(@{ Severity="FAIL"; Component="Camera";      Message="Camera unavailable (button disabled)" }) }
             if ($name -eq "Turn camera on"  -and $enabled) {
                 $issues.Add(@{ Severity="WARN"; Component="Camera";      Message="Camera is off during call" }) }
-            # Mic button state
             if ($name -eq "Unmute mic"      -and -not $enabled -and -not ($issues | Where-Object { $_.Component -eq "Microphone" })) {
                 $issues.Add(@{ Severity="FAIL"; Component="Microphone";  Message="Microphone unavailable (button disabled)" }) }
-            # Speaker button state
             if ($name -eq "Speaker is off"  -and -not $enabled) {
                 $issues.Add(@{ Severity="WARN"; Component="Speaker";     Message="Speaker unavailable (button disabled)" }) }
         } catch {}
@@ -109,29 +151,44 @@ function Click-HangupButton {
     Write-Log "Click sent"
 }
 
+function Write-Result {
+    param([string]$Status, [string]$Message, [int]$ConnectedSeconds=0, [array]$Issues=@())
+    $issueList = $Issues | ForEach-Object { "$($_.Severity) $($_.Component): $($_.Message)" }
+    @{
+        Status           = $Status
+        Message          = $Message
+        ConnectedSeconds = $ConnectedSeconds
+        Timestamp        = (Get-Date -f "o")
+        Issues           = @($Issues | ForEach-Object { [PSCustomObject]$_ })
+    } | ConvertTo-Json -Depth 3 | Set-Content $ResultFile -Encoding UTF8
+    Write-Log "Written result '$Status' to $ResultFile"
+}
+
 # ==== MAIN ====
 Write-Log "Diag9 started"
+New-Item -ItemType Directory -Path (Split-Path $ResultFile) -Force | Out-Null
 
 Dump-Buttons "initial"
 
-if (-not (Has-Button "Join")) {
-    Write-Log "No 'Join' button found - no scheduled meeting available" "WARN"
-    Write-Log "Diag9 aborted."
-    exit 1
+# ── Join ──────────────────────────────────────────────────────────────────────
+$joined = $false
+
+if (Has-Button "Join") {
+    Write-Log "Found calendar 'Join' button — invoking..."
+    $joined = Invoke-Button "Join"
+} else {
+    $joined = Join-ByMeetingId -MeetingId $MeetingId -Passcode $Passcode
 }
 
-# Step 1: join via companion app UIA
-Write-Log "Invoking 'Join' button..."
-$joined = Invoke-Button "Join"
 if (-not $joined) {
-    Write-Log "Failed to invoke 'Join'" "WARN"
+    Write-Log "Failed to join — aborting." "WARN"
+    Write-Result -Status "FAIL" -Message "Could not find a Join button (no calendar meeting and Join-with-ID failed)"
     exit 1
 }
 
 $joinTime = Get-Date
 Write-Log "Polling for lobby admit buttons for up to 90s while call settles..."
 
-# Poll every 5s: admit any observer waiting in lobby, then wait for camera check
 $pollDeadline = (Get-Date).AddSeconds(90)
 while ((Get-Date) -lt $pollDeadline) {
     $allBtns = $AE::RootElement.FindAll($TF::Descendants, $allCond) | Where-Object {
@@ -152,22 +209,21 @@ while ((Get-Date) -lt $pollDeadline) {
 
 Dump-Buttons "in-call"
 
-# Check hardware / notification issues while in-call
+# ── Check hardware issues ──────────────────────────────────────────────────────
 $issues = Check-InCallIssues
 if ($issues.Count -gt 0) {
-    Write-Log "=== In-call issues detected ==="
+    Write-Log "=== In-call issues ==="
     foreach ($i in $issues) { Write-Log "  [$($i.Severity)] $($i.Component): $($i.Message)" }
 } else {
     Write-Log "No in-call issues detected."
 }
 
-# Step 2: leave via UIA; Teams may call the button "Leave", "Leave call", or "Hang up"
+# ── Leave ─────────────────────────────────────────────────────────────────────
 Write-Log "=== Attempting to leave ==="
 $leftViaUIA = $false
 foreach ($leaveLabel in @("Leave", "Leave call", "Hang up", "End call")) {
     if (Invoke-Button $leaveLabel) { $leftViaUIA = $true; break }
 }
-
 if (-not $leftViaUIA) {
     Write-Log "UIA Leave not found - trying mouse click fallback..."
     Click-HangupButton $HangupX $HangupY
@@ -178,14 +234,14 @@ Start-Sleep -Seconds 10
 
 Dump-Buttons "after-leave"
 
-# Step 3: result
+# ── Result ────────────────────────────────────────────────────────────────────
 $connectedSeconds = [int]((Get-Date) - $joinTime).TotalSeconds
 $leaveGone        = -not (Has-Button "Leave")
 $backToHome       = (Has-Button "Meet now") -or (Has-Button "Join with an ID")
+$left             = $leaveGone -or $backToHome
 
 Write-Log "LeaveGone=$leaveGone  BackToHome=$backToHome  ConnectedSec=$connectedSeconds"
 
-$left = $leaveGone -or $backToHome
 if (-not $joined -or -not $left) {
     $status = "FAIL"
 } elseif ($issues.Count -gt 0 -and ($issues | Where-Object { $_.Severity -eq "FAIL" })) {
@@ -200,14 +256,7 @@ $issueList = $issues | ForEach-Object { "$($_.Severity) $($_.Component): $($_.Me
 $message   = if ($status -eq "PASS") { "Joined and left successfully. No issues." } `
              elseif ($status -eq "WARN") { "Joined and left. Warnings: $($issueList -join '; ')" } `
              else { "Join=$joined Left=$left Issues: $($issueList -join '; ')" }
-Write-Log "Result: $status - $message"
 
-@{
-    Status           = $status
-    Message          = $message
-    ConnectedSeconds = $connectedSeconds
-    Timestamp        = (Get-Date -f "o")
-    Issues           = @($issues | ForEach-Object { [PSCustomObject]$_ })
-} | ConvertTo-Json -Depth 3 | Set-Content $ResultFile -Encoding UTF8
-Write-Log "Written to $ResultFile"
+Write-Log "Result: $status - $message"
+Write-Result -Status $status -Message $message -ConnectedSeconds $connectedSeconds -Issues $issues
 Write-Log "Diag9 done."
