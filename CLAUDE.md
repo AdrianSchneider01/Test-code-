@@ -18,6 +18,10 @@ Automate daily health checks and remote test calls on Microsoft Teams Rooms (Cre
 - `MTR-InjectUIAutomation.ps1`: SYSTEM-level helper that bridges Session 0 → Skype session; used for cross-session UIA injection (kept for reference — see known facts below)
 - `MTR-TestCallHelper.ps1`: UIA join/leave helper spawned in the Skype session (kept for reference)
 - `scripts/Invoke-MTRTest.ps1`: deploys a script as the launch hook, restarts the MTR, waits, pulls back logs and output
+- `scripts/Diagnose-MTRTask.ps1`: checks the MTRTestCallTemp task config and session context, then runs a UIA probe in that session
+- `MTR-UIDiscovery.ps1`: launch-hook script that dumps all UI Automation elements (plus Join button candidates) to `C:\Users\Skype\UIElements.txt`, then hands off to `C:\Users\Skype\ScriptLaunchCache\Launch.ps1`
+- `Run-MTRDiscoveryRemote.ps1`: original menu-driven deploy/fetch/restore for UI discovery. Interactive (Get-Credential, Read-Host), so kept for reference only; use `scripts\Invoke-MTRTest.ps1` instead
+- Not in this repo yet: `MTR-HealthCheck.ps1` (daily 7am health check email) and `Setup-MTRHealthCheckTask.ps1`
 
 ## Known facts (don't retry failed approaches)
 - Code that needs the Teams UI MUST run via `C:\Rigel\AdminHookScripts\Launch.ps1`. It runs in the Skype session before launch.
